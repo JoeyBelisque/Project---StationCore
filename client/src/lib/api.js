@@ -1,6 +1,10 @@
 /**
- * Base da API: em dev usa o proxy /api → backend na porta 3000.
- * Em produção, defina VITE_API_URL (ex.: https://api.suaempresa.com).
+ * Cliente HTTP partilhado pelo front.
+ *
+ * Em desenvolvimento, getApiBase() devolve '/api' e o Vite (vite.config.js)
+ * encaminha para http://localhost:3000 sem o prefixo /api — evita CORS no browser.
+ *
+ * Em produção, define VITE_API_URL apontando para o domínio real da API.
  */
 export function getApiBase() {
   const env = import.meta.env.VITE_API_URL
@@ -8,6 +12,7 @@ export function getApiBase() {
   return '/api'
 }
 
+/** fetch + JSON: trata erros HTTP como exceção; 204 → sem corpo JSON. */
 export async function fetchJson(path, options = {}) {
   const url = `${getApiBase()}${path.startsWith('/') ? path : `/${path}`}`
   const res = await fetch(url, {

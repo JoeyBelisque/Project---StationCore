@@ -1,15 +1,24 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { listarHeadsets } from '../services/headsetStorage'
+import { listarHeadsets } from '../services/headsetsApi'
 import { listarComputadores } from '../services/computadoresApi'
 
 export function Dashboard() {
-  const [headsets, setHeadsets] = useState(0)
+  const [headsets, setHeadsets] = useState(null)
+  const [hsError, setHsError] = useState(null)
   const [pcs, setPcs] = useState(null)
   const [pcError, setPcError] = useState(null)
 
   useEffect(() => {
-    setHeadsets(listarHeadsets().length)
+    listarHeadsets()
+      .then((rows) => {
+        setHeadsets(Array.isArray(rows) ? rows.length : 0)
+        setHsError(null)
+      })
+      .catch(() => {
+        setHeadsets(null)
+        setHsError('API indisponível (suba o backend na porta 3000)')
+      })
     listarComputadores()
       .then((rows) => {
         setPcs(Array.isArray(rows) ? rows.length : 0)
@@ -25,16 +34,14 @@ export function Dashboard() {
     <div className="page">
       <div className="page-head">
         <h2>Início</h2>
-        <p className="muted">
-          Visão geral do cadastro de headsets (navegador) e computadores (API).
-        </p>
+        <p className="muted">Visão geral do cadastro de headsets e computadores (API + PostgreSQL).</p>
       </div>
 
       <div className="card-grid">
         <Link to="/headsets" className="stat-card">
           <span className="stat-label">Headsets cadastrados</span>
-          <strong className="stat-value">{headsets}</strong>
-          <span className="stat-hint">Persistência local até integrar API</span>
+          <strong className="stat-value">{hsError ? '—' : headsets ?? '…'}</strong>
+          <span className="stat-hint">{hsError || 'Sincronizado com o servidor'}</span>
         </Link>
         <Link to="/computadores" className="stat-card">
           <span className="stat-label">Computadores</span>

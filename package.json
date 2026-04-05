@@ -2,15 +2,20 @@
   "name": "project---stationcore",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/app.js",
   "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "db:migrate": "node scripts/pg-migrate.mjs up",
+    "db:migrate:down": "node scripts/pg-migrate.mjs down",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "devDependencies": {
+    "node-pg-migrate": "^8.0.4",
     "nodemon": "^3.1.14"
   },
   "dependencies": {

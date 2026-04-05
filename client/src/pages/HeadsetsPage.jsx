@@ -1,10 +1,28 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { HEADSET_STATUS, labelByValue } from '../constants/status'
 import { Modal } from '../components/Modal'
 import { Pagination } from '../components/Pagination'
-import { listarHeadsets, removerHeadset, salvarHeadset } from '../services/headsetStorage'
+import {
+  atualizarHeadset,
+  criarHeadset,
+  listarHeadsets,
+  removerHeadset,
+} from '../services/headsetsApi'
 
 const PAGE_SIZE = 20
+
+function mapRow(r) {
+  return {
+    id: r.id,
+    matricula: r.matricula,
+    lacre: r.lacre,
+    marca: r.marca ?? '',
+    numeroSerie: r.numero_serie ?? '',
+    status: r.status,
+    observacoes: r.observacoes ?? '',
+    atualizadoEm: r.updated_at,
+  }
+}
 
 const emptyForm = () => ({
   id: null,
@@ -17,10 +35,30 @@ const emptyForm = () => ({
 })
 
 export function HeadsetsPage() {
-  const [items, setItems] = useState(() => listarHeadsets())
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [q, setQ] = useState('')
   const [page, setPage] = useState(0)
   const [modal, setModal] = useState(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await listarHeadsets()
+      setItems(Array.isArray(data) ? data.map(mapRow) : [])
+    } catch (e) {
+      setError(e.message || 'Falha ao carregar')
+      setItems([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
@@ -51,10 +89,6 @@ export function HeadsetsPage() {
     setPage((p) => Math.min(p, maxPage))
   }, [filtered.length])
 
-  function refresh() {
-    setItems(listarHeadsets())
-  }
-
   function openNew() {
     setModal({ mode: 'edit', form: emptyForm() })
   }
@@ -63,26 +97,38 @@ export function HeadsetsPage() {
     setModal({ mode: 'edit', form: { ...emptyForm(), ...row } })
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     const f = modal.form
-    salvarHeadset({
-      id: f.id,
+    const body = {
       matricula: f.matricula.trim(),
       lacre: f.lacre.trim(),
       marca: f.marca.trim(),
-      numeroSerie: f.numeroSerie.trim(),
+      numero_serie: f.numeroSerie.trim(),
       status: f.status,
       observacoes: f.observacoes.trim(),
-    })
-    refresh()
-    setModal(null)
+    }
+    try {
+      if (f.id) {
+        await atualizarHeadset(f.id, body)
+      } else {
+        await criarHeadset(body)
+      }
+      setModal(null)
+      await load()
+    } catch (err) {
+      alert(err.message || 'Erro ao salvar')
+    }
   }
 
-  function handleDelete(id) {
-    if (!confirm('Remover este headset do cadastro local?')) return
-    removerHeadset(id)
-    refresh()
+  async function handleDelete(id) {
+    if (!confirm('Remover este headset do cadastro?')) return
+    try {
+      await removerHeadset(id)
+      await load()
+    } catch (err) {
+      alert(err.message || 'Erro ao excluir')
+    }
   }
 
   return (
@@ -91,8 +137,8 @@ export function HeadsetsPage() {
         <div>
           <h2>Headsets</h2>
           <p className="muted">
-            Vínculo operador (matrícula) ↔ lacre; marca e série. Dados salvos neste navegador até
-            existir API.
+            Vínculo operador (matrícula) ↔ lacre; marca e série. Dados no PostgreSQL (mesma API que
+            computadores).
           </p>
         </div>
         <button type="button" className="btn primary" onClick={openNew}>
@@ -114,6 +160,13 @@ export function HeadsetsPage() {
         />
       </div>
 
+      {error && (
+        <p className="muted" role="alert">
+          {error} — confira se o backend está em <code>http://localhost:3000</code> e se rodou{' '}
+          <code>npm run db:migrate</code> após criar a tabela <code>headsets</code>.
+        </p>
+      )}
+
       <div className="table-wrap">
         <table className="data-table">
           <thead>
@@ -128,7 +181,13 @@ export function HeadsetsPage() {
             </tr>
           </thead>
           <tbody>
-            {pageItems.length === 0 ? (
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="empty-cell">
+                  Carregando…
+                </td>
+              </tr>
+            ) : pageItems.length === 0 ? (
               <tr>
                 <td colSpan={7} className="empty-cell">
                   Nenhum registro. Use &quot;Novo headset&quot; ou ajuste a busca.

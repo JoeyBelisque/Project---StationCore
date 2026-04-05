@@ -1,3 +1,4 @@
+/** Funções finas: uma por endpoint; o trabalho pesado está em lib/api.js. */
 import { fetchJson } from '../lib/api'
 
 export async function listarComputadores() {
