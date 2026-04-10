@@ -1,9 +1,18 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { clearUserSession, getStoredUser } from '../lib/auth'
 
 const linkClass = ({ isActive }) =>
   `nav-link ${isActive ? 'active' : ''}`
 
 export function Layout() {
+  const navigate = useNavigate()
+  const user = getStoredUser()
+
+  function handleLogout() {
+    clearUserSession()
+    navigate('/login', { replace: true })
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -25,6 +34,12 @@ export function Layout() {
             Computadores
           </NavLink>
         </nav>
+        <div className="auth-actions">
+          <span className="small muted">Olá, {user?.nome ?? user?.email ?? 'Usuário'}</span>
+          <button type="button" className="btn small" onClick={handleLogout}>
+            Sair
+          </button>
+        </div>
       </header>
       <main className="app-main">
         <Outlet />

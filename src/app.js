@@ -6,6 +6,7 @@ import express from "express";
 import cors from "cors";
 import computadorRoutes from "./routes/computador.routes.js";
 import headsetRoutes from "./routes/headset.routes.js";
+import authRoutes from "./routes/auth.routes.js";
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.use(express.json());
 // Prefixos de URL: tudo em computador.routes.js fica sob /computadores, etc.
 app.use("/computadores", computadorRoutes);
 app.use("/headsets", headsetRoutes);
+app.use("/auth", authRoutes);
 
 // Middleware de erros do Express: 4 argumentos (err, req, res, next).
 // Só corre se alguma rota/controller chamar next(erro) ou lançar erro não tratado.

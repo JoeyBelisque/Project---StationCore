@@ -11,6 +11,7 @@
   --success: #4ade80;
   --radius: 10px;
   --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --gray-900: #0a0f1a;
 }
 
 *,
@@ -28,8 +29,9 @@ body,
 body {
   margin: 0;
   font-family: var(--font);
-  background: radial-gradient(1200px 600px at 10% -10%, #1e3a5f 0%, transparent 55%),
-    radial-gradient(800px 400px at 100% 0%, #0c4a6e 0%, transparent 50%), var(--bg);
+  /*background: radial-gradient(1200px 600px at 10% -10%, #1e3a5f 0%, transparent 55%),
+    radial-gradient(800px 400px at 100% 0%, #0c4a6e 0%, transparent 50%), var(--bg);*/
+  background: var(--gray-900);
   color: var(--text);
   line-height: 1.5;
 }
@@ -93,6 +95,12 @@ a:hover {
 .app-nav {
   display: flex;
   gap: 0.35rem;
+}
+
+.auth-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
 }
 
 .nav-link {
