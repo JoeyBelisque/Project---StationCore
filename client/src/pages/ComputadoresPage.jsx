@@ -2,11 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PC_STATUS, labelByValue } from '../constants/status'
 import { Modal } from '../components/Modal'
 import { Pagination } from '../components/Pagination'
-import { criarComputador, listarComputadores } from '../services/computadoresApi'
+import {
+  criarComputador,
+  listarComputadores,
+  atualizarComputador,
+  removerComputador,
+} from '../services/computadoresApi'
 
 const PAGE_SIZE = 25
 
 const emptyForm = () => ({
+  id: null,
   hostname: '',
   serial_number: '',
   status: 'em_uso',
@@ -20,7 +26,7 @@ export function ComputadoresPage() {
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [page, setPage] = useState(0)
-  const [modal, setModal] = useState(false)
+  const [modal, setModal] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -63,7 +69,7 @@ export function ComputadoresPage() {
     setPage((p) => Math.min(p, maxPage))
   }, [filtered.length])
 
-  async function handleCreate(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     const fd = new FormData(e.target)
     const body = {
@@ -73,11 +79,33 @@ export function ComputadoresPage() {
       pa: String(fd.get('pa') || '').trim(),
     }
     try {
-      await criarComputador(body)
-      setModal(false)
+      if (modal.form.id) {
+        await atualizarComputador(modal.form.id, body)
+      } else {
+        await criarComputador(body)
+      }
+      setModal(null)
       await load()
     } catch (err) {
       alert(err.message || 'Erro ao salvar')
+    }
+  }
+
+  function openNew() {
+    setModal({ mode: 'edit', form: emptyForm() })
+  }
+
+  function openEdit(row) {
+    setModal({ mode: 'edit', form: { ...emptyForm(), ...row } })
+  }
+
+  async function handleDelete(id) {
+    if (!confirm('Remover este computador do cadastro?')) return
+    try {
+      await removerComputador(id)
+      await load()
+    } catch (err) {
+      alert(err.message || 'Erro ao excluir')
     }
   }
 
@@ -98,7 +126,7 @@ export function ComputadoresPage() {
           <button
             type="button"
             className="btn primary"
-            onClick={() => setModal(true)}
+            onClick={openNew}
             disabled={!!error}
           >
             Novo computador
@@ -154,12 +182,13 @@ export function ComputadoresPage() {
                 <th>Hostname</th>
                 <th>Nº série</th>
                 <th>Status</th>
+                <th className="col-actions">Ações</th>
               </tr>
             </thead>
             <tbody>
               {pageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="empty-cell">
+                  <td colSpan={5} className="empty-cell">
                     {rows.length === 0
                       ? 'Nenhum computador cadastrado ou API indisponível.'
                       : 'Nenhum resultado para o filtro atual.'}
@@ -167,7 +196,7 @@ export function ComputadoresPage() {
                 </tr>
               ) : (
                 pageItems.map((r) => (
-                  <tr key={r.id ?? `${r.hostname}-${r.serial_number}`}>
+                  <tr key={r.id}>
                     <td className="mono">{r.pa ?? '—'}</td>
                     <td className="mono">{r.hostname ?? '—'}</td>
                     <td className="mono">{r.serial_number ?? '—'}</td>
@@ -175,6 +204,18 @@ export function ComputadoresPage() {
                       <span className={`badge pc-${r.status}`}>
                         {labelByValue(PC_STATUS, r.status)}
                       </span>
+                    </td>
+                    <td className="col-actions">
+                      <button type="button" className="btn link" onClick={() => openEdit(r)}>
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        className="btn link danger"
+                        onClick={() => handleDelete(r.id)}
+                      >
+                        Excluir
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -193,11 +234,11 @@ export function ComputadoresPage() {
 
       {modal && (
         <Modal
-          title="Cadastrar computador"
-          onClose={() => setModal(false)}
+          title={modal.form.id ? 'Editar computador' : 'Cadastrar computador'}
+          onClose={() => setModal(null)}
           footer={
             <>
-              <button type="button" className="btn" onClick={() => setModal(false)}>
+              <button type="button" className="btn" onClick={() => setModal(null)}>
                 Cancelar
               </button>
               <button type="submit" form="form-pc" className="btn primary">
@@ -206,22 +247,37 @@ export function ComputadoresPage() {
             </>
           }
         >
-          <form id="form-pc" className="form-grid" onSubmit={handleCreate}>
+          <form id="form-pc" className="form-grid" onSubmit={handleSubmit}>
             <label>
               PA (mesa / posto)
-              <input name="pa" className="input" required />
+              <input
+                name="pa"
+                className="input"
+                defaultValue={modal.form.pa}
+                required
+              />
             </label>
             <label>
               Hostname
-              <input name="hostname" className="input mono" required />
+              <input
+                name="hostname"
+                className="input mono"
+                defaultValue={modal.form.hostname}
+                required
+              />
             </label>
             <label>
               Número de série
-              <input name="serial_number" className="input mono" required />
+              <input
+                name="serial_number"
+                className="input mono"
+                defaultValue={modal.form.serial_number}
+                required
+              />
             </label>
             <label className="full">
               Status
-              <select name="status" className="input" defaultValue={emptyForm().status}>
+              <select name="status" className="input" defaultValue={modal.form.status}>
                 {PC_STATUS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}

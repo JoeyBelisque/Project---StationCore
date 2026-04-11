@@ -39,6 +39,7 @@ export function HeadsetsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [q, setQ] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [page, setPage] = useState(0)
   const [modal, setModal] = useState(null)
 
@@ -62,8 +63,9 @@ export function HeadsetsPage() {
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
-    if (!s) return items
     return items.filter((h) => {
+      if (statusFilter && String(h.status) !== statusFilter) return false
+      if (!s) return true
       const blob = [
         h.matricula,
         h.lacre,
@@ -77,7 +79,7 @@ export function HeadsetsPage() {
         .toLowerCase()
       return blob.includes(s)
     })
-  }, [items, q])
+  }, [items, q, statusFilter])
 
   const pageItems = useMemo(() => {
     const start = page * PAGE_SIZE
@@ -108,6 +110,17 @@ export function HeadsetsPage() {
       status: f.status,
       observacoes: f.observacoes.trim(),
     }
+    // Validar duplicacao de headsets em uso
+    if (body.status === 'em_uso' && body.numero_serie.trim()) {
+      const duplicado = items.some(
+        (h) => h.status === 'em_uso' && h.numeroSerie === body.numero_serie && h.id !== f.id
+      )
+      if (duplicado) {
+        alert('Erro: Ja existe um headset em uso com este numero de serie!\n\nUm headset so pode estar em uso uma unica vez.')
+        return
+      }
+    }
+    
     try {
       if (f.id) {
         await atualizarHeadset(f.id, body)
@@ -146,11 +159,11 @@ export function HeadsetsPage() {
         </button>
       </div>
 
-      <div className="toolbar">
+      <div className="toolbar row wrap">
         <input
           type="search"
-          className="input search"
-          placeholder="Buscar por matrícula, lacre, marca, série…"
+          className="input search grow"
+          placeholder="Buscar por matrícula, lacre, série…"
           value={q}
           onChange={(e) => {
             setQ(e.target.value)
@@ -158,6 +171,22 @@ export function HeadsetsPage() {
           }}
           aria-label="Buscar headsets"
         />
+        <select
+          className="input"
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value)
+            setPage(0)
+          }}
+          aria-label="Filtrar por status"
+        >
+          <option value="">Todos os status</option>
+          {HEADSET_STATUS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {error && (

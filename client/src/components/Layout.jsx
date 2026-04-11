@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { clearUserSession, getStoredUser } from '../lib/auth'
+import stationcoreLogo from '../assets/stationcore_icone.png'
 
 const linkClass = ({ isActive }) =>
   `nav-link ${isActive ? 'active' : ''}`
@@ -16,14 +17,16 @@ export function Layout() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden />
-          <div>
-            <h1>StationCore</h1>
-            <p className="brand-sub">Headsets e computadores por PA</p>
+        <div className="header-brand">
+          <div className="brand">
+            <img src={stationcoreLogo} alt="StationCore Logo" className="brand-mark" />
+            <div>
+              <h1>StationCore</h1>
+              <p className="brand-sub">Headsets e computadores por PA</p>
+            </div>
           </div>
         </div>
-        <nav className="app-nav" aria-label="Principal">
+        <nav className="header-nav" aria-label="Principal">
           <NavLink to="/" end className={linkClass}>
             Início
           </NavLink>
@@ -33,8 +36,11 @@ export function Layout() {
           <NavLink to="/computadores" className={linkClass}>
             Computadores
           </NavLink>
+          <NavLink to="/importar" className={linkClass}>
+            Importar
+          </NavLink>
         </nav>
-        <div className="auth-actions">
+        <div className="header-auth">
           <span className="small muted">Olá, {user?.nome ?? user?.email ?? 'Usuário'}</span>
           <button type="button" className="btn small" onClick={handleLogout}>
             Sair

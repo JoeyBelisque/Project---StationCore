@@ -7,6 +7,8 @@ import cors from "cors";
 import computadorRoutes from "./routes/computador.routes.js";
 import headsetRoutes from "./routes/headset.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import importacaoRoutes from "./routes/importacao.routes.js";
+import { requireAuth } from "./middlewares/auth.middleware.js";
 
 const app = express();
 
@@ -16,9 +18,10 @@ app.use(cors());
 app.use(express.json());
 
 // Prefixos de URL: tudo em computador.routes.js fica sob /computadores, etc.
-app.use("/computadores", computadorRoutes);
-app.use("/headsets", headsetRoutes);
 app.use("/auth", authRoutes);
+app.use("/computadores", requireAuth, computadorRoutes);
+app.use("/headsets", requireAuth, headsetRoutes);
+app.use("/importacao", requireAuth, importacaoRoutes);
 
 // Middleware de erros do Express: 4 argumentos (err, req, res, next).
 // Só corre se alguma rota/controller chamar next(erro) ou lançar erro não tratado.

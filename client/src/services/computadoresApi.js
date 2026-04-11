@@ -11,3 +11,16 @@ export async function criarComputador(body) {
     body: JSON.stringify(body),
   })
 }
+
+export async function atualizarComputador(id, body) {
+  return fetchJson(`/computadores/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function removerComputador(id) {
+  return fetchJson(`/computadores/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+}

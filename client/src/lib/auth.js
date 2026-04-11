@@ -17,6 +17,10 @@ export function getStoredUser() {
   return getStoredSession()?.user ?? null
 }
 
+export function getAuthToken() {
+  return getStoredSession()?.token ?? null
+}
+
 export function saveUserSession(session) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
 }
