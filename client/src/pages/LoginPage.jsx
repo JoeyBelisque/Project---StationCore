@@ -34,7 +34,7 @@ export function LoginPage() {
         <div className="login-avatar" aria-hidden>
           <span>👤</span>
         </div>
-        <h2 className="login-title">CUSTOMER LOGIN</h2>
+        <h2 className="login-title">LOGIN</h2>
 
         <form className="login-form" onSubmit={handleSubmit}>
           <label className="login-line-field">
@@ -82,9 +82,9 @@ export function LoginPage() {
           </button>
         </form>
 
-        <p className="small muted login-hint">
+        {/*<p className="small muted login-hint">
           Teste: <code>admin@stationcore.local</code> / <code>123456</code>
-        </p>
+        </p>*/}
       </div>
     </section>
   )

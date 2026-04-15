@@ -12,6 +12,7 @@ import {
 const PAGE_SIZE = 20
 
 function mapRow(r) {
+  // Adapta o formato da API para o formato usado pela tela.
   return {
     id: r.id,
     matricula: r.matricula,
@@ -63,6 +64,8 @@ export function HeadsetsPage() {
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
+    // Concentra todas as regras de filtro em um único passo:
+    // status primeiro e busca textual depois.
     return items.filter((h) => {
       if (statusFilter && String(h.status) !== statusFilter) return false
       if (!s) return true
@@ -82,11 +85,13 @@ export function HeadsetsPage() {
   }, [items, q, statusFilter])
 
   const pageItems = useMemo(() => {
+    // Paginação em memória para manter a UI rápida com lista filtrada.
     const start = page * PAGE_SIZE
     return filtered.slice(start, start + PAGE_SIZE)
   }, [filtered, page])
 
   useEffect(() => {
+    // Se o filtro reduz o total, evita ficar em página inválida.
     const maxPage = Math.max(0, Math.ceil(filtered.length / PAGE_SIZE) - 1)
     setPage((p) => Math.min(p, maxPage))
   }, [filtered.length])
@@ -110,7 +115,7 @@ export function HeadsetsPage() {
       status: f.status,
       observacoes: f.observacoes.trim(),
     }
-    // Validar duplicacao de headsets em uso
+    // Regra de negócio: o mesmo número de série não pode estar em uso em dois registros.
     if (body.status === 'em_uso' && body.numero_serie.trim()) {
       const duplicado = items.some(
         (h) => h.status === 'em_uso' && h.numeroSerie === body.numero_serie && h.id !== f.id
@@ -154,9 +159,14 @@ export function HeadsetsPage() {
             computadores).
           </p>
         </div>
+        <div className='row gap'>
+        <button  type="button" className="btn" onClick={load} disabled={loading}>
+            Atualizar
+        </button>
         <button type="button" className="btn primary" onClick={openNew}>
           Novo headset
         </button>
+        </div>
       </div>
 
       <div className="toolbar row wrap">

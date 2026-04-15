@@ -10,6 +10,7 @@ export function Layout() {
   const user = getStoredUser()
 
   function handleLogout() {
+    // Limpa sessão local e evita voltar para área privada no botão "voltar".
     clearUserSession()
     navigate('/login', { replace: true })
   }
@@ -26,6 +27,7 @@ export function Layout() {
             </div>
           </div>
         </div>
+        {/* Menu principal horizontal; no mobile rola lateralmente via CSS. */}
         <nav className="header-nav" aria-label="Principal">
           <NavLink to="/" end className={linkClass}>
             Início
@@ -38,6 +40,9 @@ export function Layout() {
           </NavLink>
           <NavLink to="/importar" className={linkClass}>
             Importar
+          </NavLink>
+           <NavLink to="/exportar" className={linkClass}>
+            Exportar
           </NavLink>
         </nav>
         <div className="header-auth">

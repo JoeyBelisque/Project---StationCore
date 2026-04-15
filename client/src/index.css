@@ -87,6 +87,8 @@ a:hover {
   display: flex;
   justify-content: center;
   gap: 0.35rem;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .header-auth {
@@ -101,7 +103,8 @@ a:hover {
   height: 44px;
   border-radius: 12px;
   object-fit: contain;
-  border: 2px solid var(--text);
+  border: 2px solid;
+  border-color: var(--accent);
 }
 
 .brand h1 {
@@ -217,8 +220,10 @@ a:hover {
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 1rem;
+  /*gap: 1rem;*/
   margin-bottom: 1.5rem;
+  justify-content: center;
+  gap: 1.5rem;
 }
 
 .stat-card {
@@ -254,6 +259,10 @@ a:hover {
 .stat-card.computers::before { content: "💻"; }
 .stat-card.exchange::before { content: "🔄"; }
 .stat-card.maintenance::before { content: "🔧"; }
+.stat-card.useless:before { content: "❌"; }
+.stat-card.reserved::before { content: "🏷️"; }
+.stat-card.off::before { content: "⭕"; }
+
 
 .stat-label {
   font-size: 0.85rem;
@@ -364,6 +373,7 @@ textarea.input {
   border-color: transparent;
   color: #000;
   font-weight: 700;
+  margin-right: 1.5cap;
   box-shadow: 0 8px 20px rgba(0, 217, 255, 0.25);
 }
 
@@ -416,6 +426,8 @@ textarea.input {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: auto;
+  /* Mantém rolagem horizontal suave em telas touch. */
+  -webkit-overflow-scrolling: touch;
   background: linear-gradient(135deg, var(--surface) 0%, #1a2335 100%);
   max-height: none;
   box-shadow: var(--shadow-md);
@@ -429,6 +441,8 @@ textarea.input {
 
 .data-table {
   width: 100%;
+  /* Evita "apertar" colunas demais no mobile; usa scroll no container. */
+  min-width: 760px;
   border-collapse: collapse;
   font-size: 0.95rem;
 }
@@ -655,6 +669,20 @@ textarea.input {
   .header-nav {
     grid-column: 1 / -1;
     justify-content: flex-start;
+    /* Menu continua horizontal e passa a rolar quando faltar espaço. */
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 217, 255, 0.35) transparent;
+  }
+
+  .header-nav::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .header-nav::-webkit-scrollbar-thumb {
+    background: rgba(0, 217, 255, 0.35);
+    border-radius: 999px;
   }
 
   .header-auth {
@@ -708,6 +736,20 @@ textarea.input {
   .nav-link {
     padding: 0.4rem 0.6rem;
     font-size: 0.8rem;
+    white-space: nowrap;
+    /* Estilo "chip" para facilitar leitura/toque em telas pequenas. */
+    border: 1px solid rgba(0, 217, 255, 0.2);
+    background: rgba(20, 27, 46, 0.55);
+  }
+
+  .nav-link.active {
+    border-color: rgba(0, 217, 255, 0.45);
+    background: rgba(0, 217, 255, 0.14);
+  }
+
+  .header-nav {
+    gap: 0.45rem;
+    padding-bottom: 0.4rem;
   }
 
   .small {
@@ -726,6 +768,10 @@ textarea.input {
   .data-table td {
     padding: 0.5rem 0.25rem;
     font-size: 0.75rem;
+  }
+
+  .data-table {
+    min-width: 680px;
   }
 
   .stat-value {
@@ -749,3 +795,60 @@ textarea.input {
     font-size: 0.8rem;
   }
 }
+.stat-section-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.6rem;
+}
+
+/* Linha de 4 cards (headsets) */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Linha de 3 cards (computadores) */
+.stat-row--3 {
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 1.5rem;
+}
+
+/* Tablet: 2 colunas */
+@media (max-width: 900px) {
+  .stat-row,
+  .stat-row--3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Mobile: 1 coluna */
+@media (max-width: 480px) {
+  .stat-row,
+  .stat-row--3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Banner de sucesso/aviso (complementa o .banner.error existente) */
+.banner.success {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: rgba(81, 207, 102, 0.12);
+  border: 1px solid rgba(81, 207, 102, 0.35);
+  color: #b2f2bb;
+}
+
+.banner.warning {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: rgba(255, 212, 59, 0.12);
+  border: 1px solid rgba(255, 212, 59, 0.35);
+  color: #ffec99;
+}
+
+

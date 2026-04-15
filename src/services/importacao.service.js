@@ -9,6 +9,7 @@ function normalizeText(value) {
 }
 
 function normalizeStatus(value, fallback) {
+  // Padroniza para o formato persistido no banco (ex.: "Em uso" -> "em_uso").
   const normalized = normalizeText(value).toLowerCase().replace(/\s+/g, '_');
   return normalized || fallback;
 }
@@ -57,22 +58,22 @@ function normalizeColumnNames(row) {
 
   // Mapeia os nomes conhecidos para os campos esperados
   const fieldMap = {
-    'matricula': ['matricula', 'matrícula'],
-    'lacre': ['lacre'],
-    'marca': ['marca'],
-    'numero_serie': ['numero_serie', 'nº_série', 'no_série', 'num_serie', 'serial_number'],
-    'status': ['status'],
-    'observacoes': ['observacoes', 'observações', 'obs'],
-    'pa': ['pa', 'p_a'],
-    'hostname': ['hostname', 'host'],
-    'serial_number': ['serial_number', 'serial', 'num_serie'],
+    'matricula':     ['matricula', 'matricula'],
+    'lacre':         ['lacre'],
+    'marca':         ['marca'],
+    'numero_serie':  ['numero_serie', 'n_serie', 'no_serie', 'num_serie', 'ns'],
+    'serial_number': ['serial_number', 'serial', 'sn'],
+    'status':        ['status'],
+    'observacoes':   ['observacoes', 'obs'],
+    'pa':            ['pa', 'p_a'],
+    'hostname':      ['hostname', 'host'],
   };
 
   // Agrupa valores pelos campos esperados
   const result = {};
   for (const [fieldName, aliases] of Object.entries(fieldMap)) {
     for (const alias of aliases) {
-      if (columnMap[alias]) {
+      if (alias in columnMap) {
         result[fieldName] = columnMap[alias];
         break;
       }
@@ -237,6 +238,16 @@ async function validateComputadoresAgainstDatabase(computadores) {
   return errors;
 }
 
+async function validateAgainstDatabase(headsets, computadores) {
+  // Mantém o fluxo "importar planilha completa" consistente:
+  // valida headsets e computadores antes de tentar persistir qualquer item.
+  const [headsetErrors, computadorErrors] = await Promise.all([
+    validateHeadsetsAgainstDatabase(headsets),
+    validateComputadoresAgainstDatabase(computadores),
+  ]);
+  return [...headsetErrors, ...computadorErrors];
+}
+
 async function persistHeadsets(headsets) {
   const client = await pool.connect();
   try {
@@ -286,6 +297,7 @@ async function persistComputadores(computadores) {
 }
 
 export async function importarPlanilha(buffer, mode = "validar") {
+  // Fluxo legado para arquivo completo com duas abas ("headsets" e "computadores").
   const workbook = XLSX.read(buffer, { type: "buffer" });
 
   const headsetSheet = pickSheet(workbook, "headsets");
@@ -372,6 +384,7 @@ export async function importarHeadsets(buffer, mode = "validar") {
       };
     }
     
+    // Logar apenas a primeira linha ajuda a diagnosticar cabeçalhos fora do padrão.
     console.log(`[IMPORT HEADSETS] Primeira linha:`, JSON.stringify(rawHeadsets[0], null, 2));
 
     const { validRows: headsets, errors: headsetErrors } = collectHeadsets(rawHeadsets);
@@ -455,6 +468,7 @@ export async function importarComputadores(buffer, mode = "validar") {
       };
     }
     
+    // Logar apenas a primeira linha ajuda a diagnosticar cabeçalhos fora do padrão.
     console.log(`[IMPORT COMPUTADORES] Primeira linha:`, JSON.stringify(rawComputadores[0], null, 2));
 
     const { validRows: computadores, errors: computadorErrors } = collectComputadores(rawComputadores);

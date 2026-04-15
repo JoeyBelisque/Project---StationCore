@@ -30,32 +30,22 @@ export async function importarInicial(req, res, next) {
 
 export async function importarHeadsetsController(req, res, next) {
   try {
-    console.log("[CONTROLLER] Recebido arquivo para importar headsets");
-    
     if (!req.file?.buffer) {
-      console.log("[CONTROLLER] Arquivo não foi enviado");
       return res.status(400).json({ error: "Envie um arquivo .xlsx no campo 'arquivo'." });
     }
-
-    console.log(`[CONTROLLER] Tamanho do arquivo: ${req.file.buffer.length} bytes`);
     
     const modo = String(req.query?.modo || "validar").toLowerCase();
     if (!["validar", "importar"].includes(modo)) {
-      console.log(`[CONTROLLER] Modo inválido: ${modo}`);
       return res.status(400).json({ error: "Modo inválido. Use 'validar' ou 'importar'." });
     }
 
-    console.log(`[CONTROLLER] Chamando importarHeadsets com modo: ${modo}`);
+    // Mesmo endpoint atende "pré-validação" e "importação definitiva".
     const result = await importarHeadsets(req.file.buffer, modo);
-    
-    console.log(`[CONTROLLER] Resultado:`, JSON.stringify(result, null, 2));
-    
+
     if (!result.ok) {
-      console.log("[CONTROLLER] Validação falhou, retornando 400");
       return res.status(400).json(result);
     }
 
-    console.log("[CONTROLLER] Sucesso, retornando 200");
     return res.json({
       ...result,
       message:
@@ -64,7 +54,6 @@ export async function importarHeadsetsController(req, res, next) {
           : "Validação de headsets concluída sem erros.",
     });
   } catch (error) {
-    console.error("[CONTROLLER] ERRO CAPTURADO:", error);
     next(error);
   }
 }

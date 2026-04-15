@@ -20,6 +20,14 @@ const emptyForm = () => ({
 })
 
 export function ComputadoresPage() {
+  // Mostra data/hora de atualização com fallback seguro para dados antigos/incompletos.
+  function formatUpdatedAt(value) {
+    if (!value) return '—'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '—'
+    return date.toLocaleString('pt-BR')
+  }
+
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -182,13 +190,14 @@ export function ComputadoresPage() {
                 <th>Hostname</th>
                 <th>Nº série</th>
                 <th>Status</th>
+                <th>Atualizado</th>
                 <th className="col-actions">Ações</th>
               </tr>
             </thead>
             <tbody>
               {pageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="empty-cell">
+                  <td colSpan={6} className="empty-cell">
                     {rows.length === 0
                       ? 'Nenhum computador cadastrado ou API indisponível.'
                       : 'Nenhum resultado para o filtro atual.'}
@@ -204,6 +213,10 @@ export function ComputadoresPage() {
                       <span className={`badge pc-${r.status}`}>
                         {labelByValue(PC_STATUS, r.status)}
                       </span>
+                    </td>
+                    <td className="muted small">
+                      {/* Compatibilidade com payloads antigos e novos do backend. */}
+                      {formatUpdatedAt(r.updated_at ?? r.atualizadoEm ?? r.atualizado_em)}
                     </td>
                     <td className="col-actions">
                       <button type="button" className="btn link" onClick={() => openEdit(r)}>
