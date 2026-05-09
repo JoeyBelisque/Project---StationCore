@@ -1,7 +1,19 @@
 import XLSX from "xlsx";
 import { pool } from "../config/db.js";
 
-const STATUS_HEADSET = new Set(["em_uso", "reserva", "troca_pendente", "desligado"]);
+const STATUS_HEADSET = new Set([
+  "em_uso",
+  "estoque",
+  "defeito",
+  "emprestimo",
+  "entrega",
+  "manutencao",
+  "reserva",
+  "troca_pendente",
+  "desligado",
+]);
+const CATEGORIA_HEADSET = new Set(["estoque", "emprestimo", "entrega", "manutencao", "operacao"]);
+const MARCAS_PERMITIDAS = new Set(["intelbras", "plantronics"]);
 const STATUS_COMPUTADOR = new Set(["em_uso", "troca_pendente", "inutilizavel", "manutencao", "estoque"]);
 
 function normalizeText(value) {
@@ -12,6 +24,34 @@ function normalizeStatus(value, fallback) {
   // Padroniza para o formato persistido no banco (ex.: "Em uso" -> "em_uso").
   const normalized = normalizeText(value).toLowerCase().replace(/\s+/g, '_');
   return normalized || fallback;
+}
+
+function normalizeHeadsetLifecycle(rawStatus, rawCategoria, rawObservacao = "") {
+  const statusNorm = normalizeStatus(rawStatus, "estoque");
+  const categoriaNorm = normalizeStatus(rawCategoria, "estoque");
+  const observacao = normalizeText(rawObservacao);
+
+  if (["retorno_manutencao", "retornou_manutencao", "voltou_manutencao"].includes(statusNorm)) {
+    const obs = observacao
+      ? `${observacao} | Retorno de manutenção via importação`
+      : "Retorno de manutenção via importação";
+    return { status: "estoque", categoria: "estoque", observacoes: obs };
+  }
+
+  if (statusNorm === "disponivel") {
+    return { status: "estoque", categoria: "estoque", observacoes: observacao };
+  }
+
+  if (statusNorm === "defeito") {
+    const categoriaFinal = categoriaNorm === "estoque" ? "manutencao" : categoriaNorm;
+    return { status: "defeito", categoria: categoriaFinal, observacoes: observacao };
+  }
+
+  return {
+    status: statusNorm,
+    categoria: categoriaNorm,
+    observacoes: observacao,
+  };
 }
 
 function pickSheet(workbook, expectedName) {
@@ -37,40 +77,68 @@ function pickSheet(workbook, expectedName) {
   
   return null;
 }
-
 function normalizeColumnNames(row) {
-  // Cria um mapa de coluna original → valor, com chaves normalizadas
   const columnMap = {};
-  
-  for (const [key, value] of Object.entries(row)) {
-    // Normaliza: lowercase, remove acentos, espaços extras
-    const normalized = key
+
+  // Função auxiliar pra limpeza agressiva (anti-encoding zoado)
+  const normalizeKey = (key) =>
+    key
       .toLowerCase()
       .trim()
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-      .replace(/[^\w\s]/g, '') // Remove caracteres especiais (mantém apenas letras, números, underscores)
-      .replace(/\s+/g, '_') // Espaços vira underline
-      .replace(/_+/g, '_'); // Multiple underscores viram um
-    
+      .replace(/[\u0300-\u036f]/g, '') // remove acento
+      .replace(/[º°]/g, 'o') // 👈 resolve Nº / N°
+      .replace(/[^a-z0-9\s]/g, '') // remove lixo estranho
+      .replace(/\s+/g, '_')
+      .replace(/_+/g, '_');
+
+  // Versão ainda mais agressiva (fallback)
+  const normalizeLoose = (key) =>
+    key.toLowerCase().replace(/[^a-z]/g, '');
+
+  // 🔍 Mapeia colunas normalizadas
+  for (const [key, value] of Object.entries(row)) {
+    const normalized = normalizeKey(key);
     columnMap[normalized] = value;
   }
 
-  // Mapeia os nomes conhecidos para os campos esperados
+  // 🧠 Debug útil (pode deixar)
+  console.log("[IMPORT] Colunas detectadas:", Object.keys(columnMap));
+
   const fieldMap = {
-    'matricula':     ['matricula', 'matricula'],
-    'lacre':         ['lacre'],
-    'marca':         ['marca'],
-    'numero_serie':  ['numero_serie', 'n_serie', 'no_serie', 'num_serie', 'ns'],
-    'serial_number': ['serial_number', 'serial', 'sn'],
-    'status':        ['status'],
-    'observacoes':   ['observacoes', 'obs'],
-    'pa':            ['pa', 'p_a'],
-    'hostname':      ['hostname', 'host'],
+    matricula: ['matricula'],
+    lacre: ['lacre'],
+    marca: ['marca'],
+    numero_serie: [
+      'numero_serie',
+      'numero_de_serie',
+      'n_serie',
+      'nserie',
+      'n_de_serie',
+      'no_serie', // 👈 agora funciona por causa do replace
+      'num_serie',
+      'ns',
+    ],
+    serial_number: [
+      'serial_number',
+      'serial',
+      'sn',
+      'n_serie',
+      'no_serie',
+      'num_serie',
+      'ns',
+      'numero_serie',
+    ],
+    status: ['status'],
+    categoria: ['categoria', 'tipo', 'localizacao'],
+    observacoes: ['observacoes', 'obs'],
+    pa: ['pa', 'p_a'],
+    hostname: ['hostname', 'host'],
   };
 
-  // Agrupa valores pelos campos esperados
   const result = {};
+
+  // 🎯 Mapeamento normal
   for (const [fieldName, aliases] of Object.entries(fieldMap)) {
     for (const alias of aliases) {
       if (alias in columnMap) {
@@ -80,7 +148,39 @@ function normalizeColumnNames(row) {
     }
   }
 
-  // Adiciona qualquer campo extra que não foi mapeado
+  const keys = Object.keys(columnMap);
+
+  // 🔥 FALLBACK FORTE (resolve Debian 100%)
+  if (!result.numero_serie) {
+    const found = keys.find((k) => {
+      const clean = normalizeLoose(k);
+      return (
+        clean.includes("serie") &&
+        (clean.includes("n") || clean.includes("num") || clean.includes("numero"))
+      );
+    });
+
+    if (found) {
+      console.log("[MAP] numero_serie detectado automaticamente:", found);
+      result.numero_serie = columnMap[found];
+    }
+  }
+
+  if (!result.serial_number) {
+    const found = keys.find((k) => {
+      const clean = normalizeLoose(k);
+      return (
+        (clean.includes("serial") || clean.includes("sn") || clean.includes("serie"))
+      );
+    });
+
+    if (found) {
+      console.log("[MAP] serial_number detectado automaticamente:", found);
+      result.serial_number = columnMap[found];
+    }
+  }
+
+  // mantém extras
   for (const [normalized, value] of Object.entries(columnMap)) {
     if (!Object.values(fieldMap).flat().includes(normalized)) {
       result[normalized] = value;
@@ -89,6 +189,7 @@ function normalizeColumnNames(row) {
 
   return result;
 }
+
 
 function parseRows(sheet) {
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false });
@@ -111,13 +212,20 @@ function collectHeadsets(rows) {
     const lacre = normalizeText(raw.lacre);
     const marca = normalizeText(raw.marca);
     const numero_serie = normalizeText(raw.numero_serie);
-    const status = normalizeStatus(raw.status, "em_uso");
-    const observacoes = normalizeText(raw.observacoes);
+    const lifecycle = normalizeHeadsetLifecycle(raw.status, raw.categoria, raw.observacoes);
+    const status = lifecycle.status;
+    const categoria = lifecycle.categoria;
+    const observacoes = lifecycle.observacoes;
 
-    if (!matricula) errors.push(rowError("headsets", line, "matricula é obrigatória"));
     if (!lacre) errors.push(rowError("headsets", line, "lacre é obrigatório"));
     if (!STATUS_HEADSET.has(status)) {
       errors.push(rowError("headsets", line, `status inválido: ${status}`));
+    }
+    if (!CATEGORIA_HEADSET.has(categoria)) {
+      errors.push(rowError("headsets", line, `categoria inválida: ${categoria}`));
+    }
+    if (marca && !MARCAS_PERMITIDAS.has(marca.toLowerCase())) {
+      errors.push(rowError("headsets", line, `marca inválida: ${marca}. Use Intelbras ou Plantronics`));
     }
     if (lacre) {
       const k = lacre.toLowerCase();
@@ -132,7 +240,7 @@ function collectHeadsets(rows) {
       seenNumeroSerie.add(k);
     }
 
-    validRows.push({ matricula, lacre, marca, numero_serie, status, observacoes, line });
+    validRows.push({ matricula, lacre, marca, numero_serie, status, categoria, observacoes, line });
   });
 
   return { validRows, errors };
@@ -181,25 +289,75 @@ async function validateHeadsetsAgainstDatabase(headsets) {
 
   const lacres = [...new Set(headsets.map((h) => h.lacre).filter(Boolean))];
   const numerosSerie = [...new Set(headsets.map((h) => h.numero_serie).filter(Boolean))];
+  const matriculasAtivas = [
+    ...new Set(headsets.map((h) => (h.status === "em_uso" ? h.matricula : "")).filter(Boolean)),
+  ];
 
-  if (lacres.length || numerosSerie.length) {
+  if (lacres.length || numerosSerie.length || matriculasAtivas.length) {
     const result = await pool.query(
       `
-        SELECT lacre, numero_serie
+        SELECT lacre, numero_serie, matricula, status
         FROM headsets
         WHERE (cardinality($1::text[]) > 0 AND lacre = ANY($1::text[]))
            OR (cardinality($2::text[]) > 0 AND numero_serie = ANY($2::text[]))
+           OR (cardinality($3::text[]) > 0 AND matricula = ANY($3::text[]) AND status = 'em_uso')
       `,
-      [lacres, numerosSerie]
+      [lacres, numerosSerie, matriculasAtivas]
     );
-    const lacresDb = new Set(result.rows.map((r) => normalizeText(r.lacre).toLowerCase()).filter(Boolean));
-    const nsDb = new Set(result.rows.map((r) => normalizeText(r.numero_serie).toLowerCase()).filter(Boolean));
+    const nsMap = new Map(
+      result.rows
+        .filter((r) => normalizeText(r.numero_serie))
+        .map((r) => [normalizeText(r.numero_serie).toLowerCase(), normalizeText(r.lacre).toLowerCase()])
+    );
+    const lacreMap = new Map(
+      result.rows
+        .filter((r) => normalizeText(r.lacre))
+        .map((r) => [normalizeText(r.lacre).toLowerCase(), r])
+    );
+    const matriculaMap = new Map(
+      result.rows
+        .filter((r) => normalizeText(r.matricula) && normalizeText(r.status) === "em_uso")
+        .map((r) => [normalizeText(r.matricula).toLowerCase(), normalizeText(r.lacre)])
+    );
     headsets.forEach((row) => {
-      if (row.lacre && lacresDb.has(row.lacre.toLowerCase())) {
-        errors.push(rowError("headsets", row.line, `lacre já existe no banco: ${row.lacre}`));
+      if (row.numero_serie) {
+        const lacreDaSerie = nsMap.get(row.numero_serie.toLowerCase());
+        if (lacreDaSerie && lacreDaSerie !== row.lacre.toLowerCase()) {
+          errors.push(
+            rowError(
+              "headsets",
+              row.line,
+              `numero_serie ${row.numero_serie} já está vinculado ao lacre ${lacreDaSerie}`
+            )
+          );
+        }
       }
-      if (row.numero_serie && nsDb.has(row.numero_serie.toLowerCase())) {
-        errors.push(rowError("headsets", row.line, `numero_serie já existe no banco: ${row.numero_serie}`));
+
+      const existente = lacreMap.get(row.lacre.toLowerCase());
+      if (existente) {
+        const matriculaAtual = normalizeText(existente.matricula);
+        if (matriculaAtual && row.matricula && matriculaAtual.toLowerCase() !== row.matricula.toLowerCase()) {
+          errors.push(
+            rowError(
+              "headsets",
+              row.line,
+              `lacre ${row.lacre} já está vinculado ao operador ${matriculaAtual}; faça baixa antes de novo vínculo`
+            )
+          );
+        }
+      }
+
+      if (row.status === "em_uso" && row.matricula) {
+        const lacreDaMatricula = matriculaMap.get(row.matricula.toLowerCase());
+        if (lacreDaMatricula && lacreDaMatricula.toLowerCase() !== row.lacre.toLowerCase()) {
+          errors.push(
+            rowError(
+              "headsets",
+              row.line,
+              `operador ${row.matricula} já está em uso no lacre ${lacreDaMatricula}`
+            )
+          );
+        }
       }
     });
   }
@@ -254,13 +412,85 @@ async function persistHeadsets(headsets) {
     await client.query("BEGIN");
 
     for (const row of headsets) {
-      await client.query(
-        `
-          INSERT INTO headsets (matricula, lacre, marca, numero_serie, status, observacoes)
-          VALUES ($1, $2, $3, $4, $5, $6)
-        `,
-        [row.matricula, row.lacre, row.marca, row.numero_serie, row.status, row.observacoes]
+      const existing = await client.query(
+        `SELECT id, matricula, lacre, marca, numero_serie, status, categoria, observacoes
+         FROM headsets
+         WHERE lacre = $1`,
+        [row.lacre]
       );
+
+      if (existing.rowCount === 0) {
+        const inserted = await client.query(
+          `
+            INSERT INTO headsets (matricula, lacre, marca, numero_serie, status, categoria, observacoes)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id
+          `,
+          [row.matricula, row.lacre, row.marca, row.numero_serie || null, row.status, row.categoria, row.observacoes]
+        );
+        await client.query(
+          `INSERT INTO headset_historico (headset_id, acao, campo, valor_novo, observacao)
+           VALUES ($1, 'cadastro_importacao', 'headset', $2, $3)`,
+          [inserted.rows[0].id, row.lacre, row.observacoes]
+        );
+      } else {
+        const atual = existing.rows[0];
+        const matriculaAtual = normalizeText(atual.matricula);
+        if (matriculaAtual && row.matricula && matriculaAtual.toLowerCase() !== row.matricula.toLowerCase()) {
+          throw new Error(
+            `Conflito de vínculo: lacre ${row.lacre} já está associado ao operador ${matriculaAtual}.`
+          );
+        }
+
+        const proximaMatricula = row.matricula || matriculaAtual;
+        const proximoStatus = row.status || atual.status || "estoque";
+        const proximaCategoria = row.categoria || atual.categoria || "estoque";
+        await client.query(
+          `
+            UPDATE headsets
+            SET matricula = $2,
+                marca = $3,
+                numero_serie = $4,
+                status = $5,
+                categoria = $6,
+                observacoes = $7,
+                updated_at = NOW()
+            WHERE id = $1
+          `,
+          [
+            atual.id,
+            proximaMatricula,
+            row.marca || atual.marca,
+            row.numero_serie || atual.numero_serie || null,
+            proximoStatus,
+            proximaCategoria,
+            row.observacoes || atual.observacoes || "",
+          ]
+        );
+
+        const campos = ["matricula", "marca", "numero_serie", "status", "categoria", "observacoes"];
+        for (const campo of campos) {
+          const novoValor =
+            campo === "matricula"
+              ? proximaMatricula
+              : campo === "marca"
+              ? row.marca || atual.marca
+              : campo === "numero_serie"
+              ? row.numero_serie || atual.numero_serie || null
+              : campo === "status"
+              ? proximoStatus
+              : campo === "categoria"
+              ? proximaCategoria
+              : row.observacoes || atual.observacoes || "";
+          if ((atual[campo] ?? null) !== (novoValor ?? null)) {
+            await client.query(
+              `INSERT INTO headset_historico (headset_id, acao, campo, valor_anterior, valor_novo, observacao)
+               VALUES ($1, 'atualizacao_importacao', $2, $3, $4, $5)`,
+              [atual.id, campo, atual[campo] ?? null, novoValor ?? null, row.observacoes]
+            );
+          }
+        }
+      }
     }
 
     await client.query("COMMIT");
@@ -298,7 +528,10 @@ async function persistComputadores(computadores) {
 
 export async function importarPlanilha(buffer, mode = "validar") {
   // Fluxo legado para arquivo completo com duas abas ("headsets" e "computadores").
-  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const workbook = XLSX.read(buffer, {
+  type: "buffer",
+  codepage: 65001 // 👈 força UTF-8
+});
 
   const headsetSheet = pickSheet(workbook, "headsets");
   const computadorSheet = pickSheet(workbook, "computadores");

@@ -1,7 +1,11 @@
 export const HEADSET_STATUS = [
   { value: 'em_uso', label: 'Em uso' },
+  { value: 'estoque', label: 'Estoque' },
+  { value: 'defeito', label: 'Com defeito' },
+  { value: 'emprestimo', label: 'Empréstimo' },
+  { value: 'entrega', label: 'Separado para entrega' },
+  { value: 'manutencao', label: 'Manutenção' },
   { value: 'reserva', label: 'Reserva' },
-  { value: 'troca_pendente', label: 'Troca pendente' },
   { value: 'desligado', label: 'Desligado' },
 ]
 

@@ -24,3 +24,14 @@ export async function removerHeadset(id) {
     method: 'DELETE',
   })
 }
+
+export async function trocarLacreHeadset(id, body) {
+  return fetchJson(`/headsets/${encodeURIComponent(id)}/lacre`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function listarHistoricoHeadset(id) {
+  return fetchJson(`/headsets/${encodeURIComponent(id)}/historico`)
+}

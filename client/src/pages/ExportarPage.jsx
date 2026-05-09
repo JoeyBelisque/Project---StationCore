@@ -6,9 +6,11 @@ import { listarComputadores } from '../services/computadoresApi'
 const STATUS_HEADSET = [
   { value: '', label: 'Todos' },
   { value: 'em_uso', label: 'Em uso' },
+  { value: 'estoque', label: 'Estoque' },
+  { value: 'defeito', label: 'Com defeito' },
+  { value: 'manutencao', label: 'Manutenção' },
   { value: 'reserva', label: 'Reservados' },
   { value: 'desligado', label: 'Desligados' },
-  { value: 'troca_pendente', label: 'Troca pendente' },
 ]
 
 const STATUS_PC = [

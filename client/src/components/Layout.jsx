@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { clearUserSession, getStoredUser } from '../lib/auth'
 import stationcoreLogo from '../assets/stationcore_icone.png'
 
@@ -8,6 +9,12 @@ const linkClass = ({ isActive }) =>
 export function Layout() {
   const navigate = useNavigate()
   const user = getStoredUser()
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('theme', theme)
+  }, [theme])
 
   function handleLogout() {
     // Limpa sessão local e evita voltar para área privada no botão "voltar".
@@ -46,6 +53,13 @@ export function Layout() {
           </NavLink>
         </nav>
         <div className="header-auth">
+          <button
+            type="button"
+            className="btn small theme-toggle"
+            onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+          >
+            {theme === 'dark' ? '🌙 Escuro' : '☀️ Claro'}
+          </button>
           <span className="small muted">Olá, {user?.nome ?? user?.email ?? 'Usuário'}</span>
           <button type="button" className="btn small" onClick={handleLogout}>
             Sair

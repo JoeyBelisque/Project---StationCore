@@ -19,6 +19,25 @@
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
 }
 
+[data-theme="light"] {
+  --bg: #f3f6ff;
+  --surface: #ffffff;
+  --surface2: #f5f8ff;
+  --border: #d5dff1;
+  --text: #18223a;
+  --muted: #5e6f92;
+  --accent: #0079c2;
+  --accent-dim: #005d97;
+  --accent-light: #0094de;
+  --danger: #d94848;
+  --success: #2f9e44;
+  --warning: #e09f00;
+  --gray-900: #eaf0fb;
+  --shadow-sm: 0 2px 8px rgba(20, 30, 55, 0.08);
+  --shadow-md: 0 8px 24px rgba(20, 30, 55, 0.12);
+  --shadow-lg: 0 16px 48px rgba(20, 30, 55, 0.2);
+}
+
 *,
 *::before,
 *::after {
@@ -34,7 +53,7 @@ body,
 body {
   margin: 0;
   font-family: var(--font);
-  background: linear-gradient(135deg, var(--gray-900) 0%, #0f1528 100%);
+  background: linear-gradient(135deg, var(--bg) 0%, var(--gray-900) 100%);
   color: var(--text);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -63,7 +82,7 @@ a:hover {
   gap: 1.5rem;
   padding: 1rem 2rem;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, rgba(20, 27, 46, 0.95) 0%, rgba(14, 19, 40, 0.8) 100%);
+  background: linear-gradient(180deg, var(--surface2) 0%, var(--surface) 100%);
   backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
@@ -154,6 +173,9 @@ a:hover {
   max-width: 1600px;
   width: 100%;
   margin: 0 auto;
+  background:
+    radial-gradient(circle at top right, rgba(0, 217, 255, 0.06), transparent 32%),
+    radial-gradient(circle at top left, rgba(167, 139, 250, 0.06), transparent 28%);
 }
 
 @media (max-width: 1024px) {
@@ -231,21 +253,27 @@ a:hover {
   flex-direction: column;
   gap: 0.5rem;
   padding: 1.5rem;
-  background: linear-gradient(135deg, var(--surface) 0%, #1a2335 100%);
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: inherit;
   text-decoration: none;
   transition: all 0.3s ease;
   box-shadow: var(--shadow-sm);
+  font: inherit;
+  text-align: left;
 }
 
 .stat-card:hover {
   border-color: var(--accent);
   transform: translateY(-4px);
   box-shadow: 0 12px 32px rgba(0, 217, 255, 0.15);
-  background: linear-gradient(135deg, var(--surface2) 0%, #212a3a 100%);
+  background: linear-gradient(135deg, var(--surface2) 0%, var(--surface) 100%);
   text-decoration: none;
+}
+
+button.stat-card {
+  cursor: pointer;
 }
 
 .stat-card.icon::before {
@@ -289,7 +317,7 @@ a:hover {
 }
 
 .card.prose {
-  background: linear-gradient(135deg, var(--surface) 0%, #1a2335 100%);
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.5rem;
@@ -307,6 +335,53 @@ a:hover {
   gap: 1rem;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.toolbar .filter-select {
+  width: auto;
+  min-width: 220px;
+  flex: 0 0 auto;
+}
+
+.headset-filters {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) 220px 220px;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.segmented-control {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(20, 27, 46, 0.6);
+}
+
+.segment {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.55rem 0.95rem;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.segment:hover {
+  background: rgba(0, 217, 255, 0.08);
+  color: var(--text);
+}
+
+.segment.active {
+  background: rgba(0, 217, 255, 0.18);
+  color: var(--accent-light);
+  box-shadow: inset 0 0 0 1px rgba(0, 217, 255, 0.35);
+}
+
+.theme-toggle {
+  min-width: 90px;
 }
 
 .input {
@@ -377,6 +452,16 @@ textarea.input {
   box-shadow: 0 8px 20px rgba(0, 217, 255, 0.25);
 }
 
+.btn.danger {
+  border-color: rgba(255, 107, 107, 0.35);
+  color: #fff;
+  background: linear-gradient(135deg, #e64949 0%, #c92a2a 100%);
+}
+
+.btn.danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
 .btn.primary:hover:not(:disabled) {
   filter: brightness(1.1);
   transform: translateY(-2px);
@@ -428,7 +513,7 @@ textarea.input {
   overflow: auto;
   /* Mantém rolagem horizontal suave em telas touch. */
   -webkit-overflow-scrolling: touch;
-  background: linear-gradient(135deg, var(--surface) 0%, #1a2335 100%);
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
   max-height: none;
   box-shadow: var(--shadow-md);
 }
@@ -457,7 +542,7 @@ textarea.input {
 .data-table thead th {
   position: sticky;
   top: 0;
-  background: linear-gradient(180deg, rgba(30, 39, 64, 0.95) 0%, rgba(20, 27, 46, 0.9) 100%);
+  background: linear-gradient(180deg, var(--surface2) 0%, var(--surface) 100%);
   z-index: 1;
   font-weight: 700;
   color: var(--accent);
@@ -518,6 +603,18 @@ textarea.input {
   color: var(--warning);
 }
 
+.badge.s-defeito {
+  background: rgba(255, 107, 107, 0.16);
+  border-color: rgba(255, 107, 107, 0.45);
+  color: var(--danger);
+}
+
+.badge.s-manutencao {
+  background: rgba(0, 217, 255, 0.12);
+  border-color: rgba(0, 217, 255, 0.35);
+  color: var(--accent);
+}
+
 .badge.s-troca_pendente,
 .badge.pc-troca_pendente {
   background: rgba(255, 193, 7, 0.12);
@@ -576,10 +673,10 @@ textarea.input {
 
 .modal-panel {
   width: 100%;
-  max-width: 500px;
+  max-width: 760px;
   max-height: 90vh;
   overflow: auto;
-  background: linear-gradient(135deg, var(--surface) 0%, #1a2335 100%);
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
@@ -604,6 +701,7 @@ textarea.input {
   gap: 1rem;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(0, 217, 255, 0.08), rgba(0, 0, 0, 0));
 }
 
 .modal-head h2 {
@@ -713,6 +811,19 @@ textarea.input {
   .card-grid {
     grid-template-columns: 1fr;
   }
+
+  .segmented-control {
+    width: 100%;
+  }
+
+  .segment {
+    flex: 1;
+    text-align: center;
+  }
+
+  .headset-filters {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 480px) {
@@ -807,7 +918,7 @@ textarea.input {
 /* Linha de 4 cards (headsets) */
 .stat-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 1rem;
   margin-bottom: 0.75rem;
 }
@@ -849,6 +960,30 @@ textarea.input {
   background: rgba(255, 212, 59, 0.12);
   border: 1px solid rgba(255, 212, 59, 0.35);
   color: #ffec99;
+}
+
+.simple-bars {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.simple-bars .bar-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 44px;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.simple-bars .bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.simple-bars .bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-light) 100%);
 }
 
 
