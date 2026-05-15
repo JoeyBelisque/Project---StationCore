@@ -7,6 +7,8 @@ export const HEADSET_STATUS = [
   { value: 'manutencao', label: 'Manutenção' },
   { value: 'reserva', label: 'Reserva' },
   { value: 'desligado', label: 'Desligado' },
+  { value: 'perdido', label: 'Perdido' },
+  { value: 'furtado', label: 'Furtado' },
 ]
 
 export const PC_STATUS = [

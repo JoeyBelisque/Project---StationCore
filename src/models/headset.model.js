@@ -51,14 +51,24 @@ function normalizeNumeroSerie(value) {
   return cleaned || null;
 }
 
+function deriveCategoria(status) {
+  const s = String(status ?? "").trim().toLowerCase();
+  if (s === 'em_uso') return 'operacao';
+  if (s === 'emprestimo') return 'emprestimo';
+  if (s === 'entrega') return 'entrega';
+  if (s === 'defeito' || s === 'manutencao') return 'manutencao';
+  return 'estoque';
+}
+
 function normalizePayload(data) {
+  const status = String(data?.status ?? "estoque").trim() || "estoque";
   return {
     matricula: String(data?.matricula ?? "").trim(),
     lacre: String(data?.lacre ?? "").trim(),
     marca: normalizeMarca(data?.marca),
     numero_serie: normalizeNumeroSerie(data?.numero_serie),
-    status: String(data?.status ?? "estoque").trim() || "estoque",
-    categoria: String(data?.categoria ?? "estoque").trim() || "estoque",
+    status,
+    categoria: deriveCategoria(status),
     observacoes: String(data?.observacoes ?? "").trim(),
   };
 }
@@ -208,6 +218,57 @@ export async function trocarLacre(id, novoLacre, observacao = "") {
     await addHistoryEntry(client, id, "troca_lacre", "lacre", current.lacre, lacre, observacao);
     await client.query("COMMIT");
     return result.rows[0];
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function swapHeadset(idOriginal, idNovo, novoStatusOriginal, observacao = "") {
+  await ensureSchema();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // 1. Pega dados do original (quem está saindo)
+    const originalRes = await client.query(`SELECT * FROM headsets WHERE id = $1`, [idOriginal]);
+    const original = originalRes.rows[0];
+    if (!original) throw new Error("Headset original não encontrado");
+
+    const matricula = original.matricula;
+    if (!matricula) throw new Error("O headset original não possui um operador vinculado");
+
+    // 2. Pega dados do novo (quem está entrando)
+    const novoRes = await client.query(`SELECT * FROM headsets WHERE id = $1`, [idNovo]);
+    const novo = novoRes.rows[0];
+    if (!novo) throw new Error("Novo headset não encontrado");
+    if (novo.status !== 'estoque' && novo.status !== 'reserva') {
+      throw new Error(`Novo headset deve estar em estoque ou reserva. Status atual: ${novo.status}`);
+    }
+
+    // 3. Atualiza o original (vai para defeito, perdido ou furtado e perde a matrícula)
+    await client.query(
+      `UPDATE headsets SET status = $1, matricula = '', updated_at = NOW() WHERE id = $2`,
+      [novoStatusOriginal, idOriginal]
+    );
+    await addHistoryEntry(client, idOriginal, "troca_saida", "status", original.status, novoStatusOriginal, observacao);
+    await addHistoryEntry(client, idOriginal, "troca_saida", "matricula", original.matricula, "", "Troca realizada");
+
+    // 4. Atualiza o novo (recebe a matrícula do operador e muda status para o mesmo do original antes da troca)
+    const novoStatusNovo = original.status === 'emprestimo' ? 'emprestimo' : 'em_uso';
+    const novaCategoriaNovo = deriveCategoria(novoStatusNovo);
+
+    await client.query(
+      `UPDATE headsets SET matricula = $1, status = $2, categoria = $3, updated_at = NOW() WHERE id = $4`,
+      [matricula, novoStatusNovo, novaCategoriaNovo, idNovo]
+    );
+    await addHistoryEntry(client, idNovo, "troca_entrada", "matricula", "", matricula, `Substituindo o lacre ${original.lacre}`);
+    await addHistoryEntry(client, idNovo, "troca_entrada", "status", novo.status, novoStatusNovo, "Troca realizada");
+
+    await client.query("COMMIT");
+    return { success: true };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

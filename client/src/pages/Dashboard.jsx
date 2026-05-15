@@ -1,146 +1,242 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { 
+  Headphones, 
+  Monitor, 
+  CheckCircle2, 
+  Wrench, 
+  AlertTriangle, 
+  Package,
+  ArrowRight,
+  RefreshCcw,
+  XCircle
+} from 'lucide-react'
 import { listarHeadsets } from '../services/headsetsApi'
 import { listarComputadores } from '../services/computadoresApi'
 
+/**
+ * Componente StatCard
+ * Exibe métricas individuais com ícones e labels.
+ */
+function StatCard({ label, value, hint, icon: Icon, to, colorClass = 'accent', loading }) {
+  const content = (
+    <div className={`stat-card ${colorClass} ${loading ? 'loading' : ''}`}>
+      <div className="stat-icon">
+        <Icon size={24} />
+      </div>
+      <div className="stat-info">
+        <span className="label" title={label}>{label}</span>
+        {loading ? (
+          <div className="skeleton-text" style={{ width: '60%', height: '1.5rem', marginTop: '0.25rem' }} />
+        ) : (
+          <strong className="value">{value}</strong>
+        )}
+        {hint && !loading && <span className="stat-hint">{hint}</span>}
+      </div>
+    </div>
+  )
+
+  if (to && !loading) return <Link to={to} style={{ textDecoration: 'none', color: 'inherit' }}>{content}</Link>
+  return content
+}
+
+/**
+ * Dashboard Operacional - RESTAURAÇÃO PAINEL GERAL
+ */
 export function Dashboard() {
+  const [loading, setLoading] = useState(true)
   const [hsError, setHsError] = useState(null)
   const [pcError, setPcError] = useState(null)
-  const [hsStats, setHsStats] = useState({})
-  const [pcStats, setPcStats] = useState({})
+  const [hsStats, setHsStats] = useState({
+    total: 0, emUso: 0, estoque: 0, emprestimo: 0, defeito: 0, manutencao: 0, perdas: 0
+  })
+  const [pcStats, setPcStats] = useState({
+    total: 0, emUso: 0, estoque: 0, manutencao: 0, inutilizavel: 0
+  })
 
   useEffect(() => {
-    listarHeadsets()
+    setLoading(true)
+    const p1 = listarHeadsets()
       .then((rows) => {
         if (rows && Array.isArray(rows)) {
           setHsStats({
             total:      rows.length,
             emUso:      rows.filter(r => r.status === 'em_uso').length,
-            estoque:    rows.filter(r => r.status === 'estoque').length,
+            estoque:    rows.filter(r => r.status === 'estoque' || r.status === 'reserva').length,
+            emprestimo: rows.filter(r => r.status === 'emprestimo').length,
             defeito:    rows.filter(r => r.status === 'defeito').length,
             manutencao: rows.filter(r => r.status === 'manutencao').length,
-            reserva:    rows.filter(r => r.status === 'reserva').length,
-            desligado:  rows.filter(r => r.status === 'desligado').length,
+            perdas:     rows.filter(r => r.status === 'perdido' || r.status === 'furtado').length,
           })
         }
-        setHsError(null)
       })
-      .catch(() => {
-        setHsError('API indisponível')
-      })
+      .catch(() => setHsError('Erro API'))
 
-    listarComputadores()
+    const p2 = listarComputadores()
       .then((rows) => {
         if (rows && Array.isArray(rows)) {
           setPcStats({
             total:       rows.length,
             emUso:       rows.filter(r => r.status === 'em_uso').length,
-            manutencao:  rows.filter(r => r.status === 'manutencao').length,
+            estoque:     rows.filter(r => r.status === 'estoque').length,
+            manutencao:  rows.filter(r => r.status === 'manutencao' || r.status === 'troca_pendente').length,
             inutilizavel:rows.filter(r => r.status === 'inutilizavel').length,
           })
         }
-        setPcError(null)
       })
-      .catch(() => {
-        setPcError('API indisponível')
-      })
+      .catch(() => setPcError('Erro API'))
+    
+    Promise.all([p1, p2]).finally(() => setLoading(false))
   }, [])
 
-  const hs = (val) => hsError ? '—' : (val ?? '…')
-  const pc = (val) => pcError ? '—' : (val ?? '…')
+  const hsVal = (val) => hsError ? '—' : (val ?? '0')
+  const pcVal = (val) => pcError ? '—' : (val ?? '0')
+  
   const hsTotal = hsStats.total || 0
   const hsBars = [
-    { label: 'Em uso', value: hsStats.emUso || 0 },
-    { label: 'Estoque', value: hsStats.estoque || 0 },
-    { label: 'Com defeito', value: hsStats.defeito || 0 },
-    { label: 'Manutenção', value: hsStats.manutencao || 0 },
+    { label: 'Em uso', value: hsStats.emUso || 0, color: 'var(--success)' },
+    { label: 'Empréstimo', value: hsStats.emprestimo || 0, color: '#8b5cf6' },
+    { label: 'Estoque', value: hsStats.estoque || 0, color: 'var(--accent)' },
+    { label: 'Defeito', value: hsStats.defeito || 0, color: 'var(--danger)' },
+    { label: 'Manutenção', value: hsStats.manutencao || 0, color: 'var(--warning)' },
+    { label: 'Perdas', value: hsStats.perdas || 0, color: '#475569' },
   ]
 
   return (
-    <div className="page">
-      <div className="page-head">
-        <h2>Início</h2>
-        <p className="muted">Visão operacional do estoque, vínculos de operador e manutenção.</p>
+    <div className="page-fade-in">
+      <header className="page-header-premium" style={{ marginBottom: '2rem' }}>
+        <h2 className="page-title">Início</h2>
+        <p className="page-subtitle" style={{ marginBottom: 0 }}>Visão operacional e controle de ativos da StationCore.</p>
+      </header>
+
+      {/* Seção de Headsets - Grade Original Reconstruída */}
+      <h3 className="section-title">Headsets</h3>
+      <div className="dashboard-grid">
+        <StatCard 
+          label="Total Headsets" 
+          value={hsVal(hsStats.total)} 
+          icon={Headphones} 
+          to="/headsets" 
+          hint={`${hsStats.emUso + (hsStats.emprestimo || 0)} ativos`}
+          loading={loading}
+        />
+        <StatCard 
+          label="Em Estoque" 
+          value={hsVal(hsStats.estoque)} 
+          icon={Package} 
+          to="/headsets?status=estoque" 
+          hint="Disponível p/ vínculo"
+          loading={loading}
+        />
+        <StatCard 
+          label="Empréstimos" 
+          value={hsVal(hsStats.emprestimo)} 
+          icon={RefreshCcw} 
+          to="/headsets?status=emprestimo" 
+          hint="Equipamentos cedidos"
+          loading={loading}
+        />
+        <StatCard 
+          label="Manutenção" 
+          value={hsVal(hsStats.manutencao)} 
+          icon={Wrench} 
+          to="/headsets?status=manutencao" 
+          loading={loading}
+        />
+        <StatCard 
+          label="Com Defeito" 
+          value={hsVal(hsStats.defeito)} 
+          icon={AlertTriangle} 
+          to="/headsets?status=defeito" 
+          colorClass="danger"
+          loading={loading}
+        />
+        <StatCard 
+          label="Perdas/Extravios" 
+          value={hsVal(hsStats.perdas)} 
+          icon={XCircle} 
+          to="/headsets" 
+          colorClass="danger"
+          loading={loading}
+        />
       </div>
 
-      {/* ── Headsets ── */}
-      <p className="stat-section-label">Headsets</p>
-      <div className="stat-row">
-        <Link to="/headsets" className="stat-card icon headsets">
-          <span className="stat-label">Total</span>
-          <strong className="stat-value">{hs(hsStats.total)}</strong>
-          <span className="stat-hint">{!hsError && hsStats.emUso !== undefined ? `${hsStats.emUso} em uso` : hsError}</span>
-        </Link>
-        <Link to="/headsets?status=estoque" className="stat-card icon reserved">
-          <span className="stat-label">Estoque</span>
-          <strong className="stat-value">{hs(hsStats.estoque)}</strong>
-          <span className="stat-hint">prontos para vincular</span>
-        </Link>
-        <Link to="/headsets?status=manutencao" className="stat-card icon maintenance">
-          <span className="stat-label">Manutenção</span>
-          <strong className="stat-value">{hs(hsStats.manutencao)}</strong>
-          <span className="stat-hint">fora de operação</span>
-        </Link>
-        <Link to="/headsets?status=defeito" className="stat-card icon useless">
-          <span className="stat-label">Com defeito</span>
-          <strong className="stat-value">{hs(hsStats.defeito)}</strong>
-          <span className="stat-hint">aguardando envio</span>
-        </Link>
+      {/* Seção de Computadores - Grade Original Reconstruída */}
+      <h3 className="section-title" style={{ marginTop: '2.5rem' }}>Computadores</h3>
+      <div className="dashboard-grid">
+        <StatCard 
+          label="Total PCs" 
+          value={pcVal(pcStats.total)} 
+          icon={Monitor} 
+          to="/computadores" 
+          hint={`${pcStats.emUso} PAs ativas`}
+          loading={loading}
+        />
+        <StatCard 
+          label="Em Estoque" 
+          value={pcVal(pcStats.estoque)} 
+          icon={Package} 
+          to="/computadores?status=estoque" 
+          hint="Pronto p/ instalação"
+          loading={loading}
+        />
+        <StatCard 
+          label="Em Reparo" 
+          value={pcVal(pcStats.manutencao)} 
+          icon={Wrench} 
+          to="/computadores?status=manutencao" 
+          loading={loading}
+        />
+        <StatCard 
+          label="Inutilizáveis" 
+          value={pcVal(pcStats.inutilizavel)} 
+          icon={AlertTriangle} 
+          to="/computadores?status=inutilizavel" 
+          colorClass="danger"
+          loading={loading}
+        />
       </div>
 
-      {/* ── Computadores ── */}
-      <p className="stat-section-label">Computadores</p>
-      <div className="stat-row stat-row--3">
-        <Link to="/computadores" className="stat-card icon computers">
-          <span className="stat-label">Total</span>
-          <strong className="stat-value">{pc(pcStats.total)}</strong>
-          <span className="stat-hint">{!pcError && pcStats.emUso !== undefined ? `${pcStats.emUso} em uso` : pcError}</span>
-        </Link>
-        <Link to="/computadores?status=manutencao" className="stat-card icon maintenance">
-          <span className="stat-label">Em manutenção</span>
-          <strong className="stat-value">{pc(pcStats.manutencao)}</strong>
-          <span className="stat-hint">em reparo</span>
-        </Link>
-        <Link to="/computadores?status=inutilizavel" className="stat-card icon useless">
-          <span className="stat-label">Inutilizáveis</span>
-          <strong className="stat-value">{pc(pcStats.inutilizavel)}</strong>
-          <span className="stat-hint">fora de uso</span>
-        </Link>
-      </div>
-
-      {/* ── Info ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-        <section className="card prose">
-          <h3>✅ Fluxo sugerido</h3>
-          <ul>
-            <li><strong>1.</strong> Cadastre o headset no status <strong>estoque</strong> sem operador.</li>
-            <li><strong>2.</strong> Quando necessário, use <strong>Vincular operador</strong> na tela de headsets.</li>
-            <li><strong>3.</strong> Use histórico e troca de lacre para rastreabilidade.</li>
+      {/* Cards de Distribuição e Fluxo */}
+      <div className="dashboard-grid" style={{ marginTop: '3rem' }}>
+        <section className="card">
+          <h4 className="card-title"><CheckCircle2 size={18} /> Fluxo Sugerido</h4>
+          <ul className="premium-list">
+            <li>Cadastre ativos no <strong>estoque</strong> sem vínculo inicial.</li>
+            <li>Utilize o <strong>Vínculo Rápido</strong> para associar a operadores.</li>
+            <li>Mantenha o histórico atualizado para auditoria.</li>
           </ul>
         </section>
-        <section className="card prose">
-          <h3>📊 Distribuição de headsets</h3>
-          <div className="simple-bars">
+
+        <section className="card">
+          <h4 className="card-title"><Headphones size={18} /> Saúde do Inventário</h4>
+          <div className="distribution-bars">
             {hsBars.map((item) => {
               const pct = hsTotal > 0 ? Math.round((item.value / hsTotal) * 100) : 0
               return (
-                <div key={item.label} className="bar-row">
-                  <span className="muted small">{item.label}</span>
-                  <div className="bar-track">
-                    <div className="bar-fill" style={{ width: `${pct}%` }} />
+                <div key={item.label} className="bar-group">
+                  <div className="bar-label">
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
                   </div>
-                  <span className="mono small">{item.value}</span>
+                  <div className="bar-track-premium">
+                    <div 
+                      className="bar-fill-premium" 
+                      style={{ width: loading ? '0%' : `${pct}%`, backgroundColor: item.color }} 
+                    />
+                  </div>
                 </div>
               )
             })}
           </div>
         </section>
-        <section className="card prose">
-          <h3>🚀 Ações rápidas</h3>
-          <div className="row wrap" style={{ gap: '0.5rem' }}>
-            <Link to="/headsets?status=estoque" className="btn">Vincular do estoque</Link>
-            <Link to="/headsets" className="btn">Cadastrar headset</Link>
-            <Link to="/importar" className="btn primary">Importar planilha</Link>
+
+        <section className="card">
+          <h4 className="card-title"><ArrowRight size={18} /> Ações Rápidas</h4>
+          <div className="action-grid-premium">
+            <Link to="/headsets?status=estoque" className="btn btn-secondary">Vincular Operador</Link>
+            <Link to="/headsets" className="btn btn-secondary">Novo Cadastro</Link>
+            <Link to="/importar" className="btn btn-primary">Importar Planilha</Link>
           </div>
         </section>
       </div>

@@ -1,4 +1,13 @@
 import { useState } from 'react'
+import { 
+  UploadCloud, 
+  FileText, 
+  CheckCircle, 
+  AlertCircle,
+  FileSpreadsheet,
+  RefreshCw,
+  ArrowRight
+} from 'lucide-react'
 import { getApiBase } from '../lib/api'
 
 export function ImportUpload() {
@@ -13,13 +22,13 @@ export function ImportUpload() {
     if (!selectedFile) return
 
     if (!selectedFile.name.endsWith('.xlsx')) {
-      setError('❌ Apenas arquivos .xlsx são permitidos!')
+      setError('Apenas arquivos .xlsx são permitidos!')
       setFile(null)
       return
     }
 
     if (selectedFile.size > 5 * 1024 * 1024) {
-      setError('❌ Arquivo muito grande (máximo 5MB)')
+      setError('Arquivo muito grande (máximo 5MB)')
       setFile(null)
       return
     }
@@ -57,7 +66,7 @@ export function ImportUpload() {
 
   async function validateFile() {
     if (!file) {
-      setError('⚠️ Selecione um arquivo primeiro')
+      setError('Selecione um arquivo primeiro')
       return
     }
 
@@ -84,14 +93,14 @@ export function ImportUpload() {
       const result = await response.json()
 
       if (!response.ok) {
-        setError(`❌ ${result.error || 'Erro ao validar arquivo'}`)
+        setError(result.error || 'Erro ao validar arquivo')
         return
       }
 
       setValidationResult(result)
-      setSuccess(`✅ Validação OK: ${result.registros?.length || 0} registros encontrados`)
+      setSuccess(`Validação OK: ${result.registros?.length || 0} registros encontrados`)
     } catch (err) {
-      setError(`❌ Erro: ${err.message}`)
+      setError(`Erro: ${err.message}`)
     } finally {
       setLoading(false)
     }
@@ -99,7 +108,7 @@ export function ImportUpload() {
 
   async function importFile() {
     if (!validationResult) {
-      setError('⚠️ Valide o arquivo primeiro')
+      setError('Valide o arquivo primeiro')
       return
     }
 
@@ -130,20 +139,19 @@ export function ImportUpload() {
       const result = await response.json()
 
       if (!response.ok) {
-        setError(`❌ ${result.error || 'Erro ao importar'}`)
+        setError(result.error || 'Erro ao importar')
         return
       }
 
-      setSuccess(`✅ Importação concluída! ${result.importados || 0} registros inseridos.`)
+      setSuccess(`Importação concluída! ${result.importados || 0} registros inseridos.`)
       setFile(null)
       setValidationResult(null)
       
-      // Reset após 2 segundos
       setTimeout(() => {
         setSuccess(null)
       }, 3000)
     } catch (err) {
-      setError(`❌ Erro: ${err.message}`)
+      setError(`Erro: ${err.message}`)
     } finally {
       setLoading(false)
     }
@@ -161,7 +169,9 @@ export function ImportUpload() {
         >
           {file ? (
             <div className="file-info">
-              <span className="file-icon">📄</span>
+              <div className="file-icon-wrapper">
+                <FileSpreadsheet size={40} className="text-success" />
+              </div>
               <div>
                 <strong>{file.name}</strong>
                 <small>{(file.size / 1024).toFixed(2)} KB</small>
@@ -169,9 +179,11 @@ export function ImportUpload() {
             </div>
           ) : (
             <div className="drop-content">
-              <span className="drop-icon">📁</span>
+              <div className="drop-icon-wrapper">
+                <UploadCloud size={48} />
+              </div>
               <p>Arraste um arquivo .xlsx aqui</p>
-              <small>ou clique para selecionar</small>
+              <small>ou clique para selecionar do computador</small>
             </div>
           )}
           <input
@@ -184,28 +196,37 @@ export function ImportUpload() {
         </div>
       </div>
 
-      {/* Erro */}
-      {error && <div className="banner error">{error}</div>}
+      {/* Alertas */}
+      {error && (
+        <div className="alert alert-danger">
+          <AlertCircle size={18} />
+          <span>{error}</span>
+        </div>
+      )}
 
-      {/* Sucesso */}
       {success && (
-        <div style={{ padding: '0.75rem 1rem', borderRadius: '8px', background: 'rgba(74, 222, 128, 0.12)', border: '1px solid rgba(74, 222, 128, 0.35)', color: '#86efac', marginBottom: '1rem' }}>
-          {success}
+        <div className="alert alert-success">
+          <CheckCircle size={18} />
+          <span>{success}</span>
         </div>
       )}
 
       {/* Resultado da Validação */}
       {validationResult && (
-        <div style={{ background: 'var(--surface)', padding: '1rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)', marginTop: '1rem' }}>
-          <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '1rem', color: 'var(--accent)' }}>✓ Validação OK</h3>
-          <p style={{ margin: '0.5rem 0', color: 'var(--text)', fontSize: '0.9rem' }}>
-            <strong>Registros encontrados:</strong> {validationResult.registros?.length || 0}
-          </p>
-          {validationResult.tiposEncontrados && (
-            <p style={{ margin: '0.5rem 0', color: 'var(--text)', fontSize: '0.9rem' }}>
-              <strong>Tipos:</strong> {validationResult.tiposEncontrados.join(', ')}
-            </p>
-          )}
+        <div className="card validation-card">
+          <h4 className="card-title"><CheckCircle size={18} /> Validação Concluída</h4>
+          <div className="validation-details">
+            <div className="detail-item">
+              <span className="label">Registros encontrados:</span>
+              <strong className="value">{validationResult.registros?.length || 0}</strong>
+            </div>
+            {validationResult.tiposEncontrados && (
+              <div className="detail-item">
+                <span className="label">Tipos detectados:</span>
+                <strong className="value">{validationResult.tiposEncontrados.join(', ')}</strong>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -213,27 +234,34 @@ export function ImportUpload() {
       <div className="button-group">
         <button
           type="button"
-          className="btn"
+          className="btn btn-secondary"
           onClick={() => document.getElementById('file-input').click()}
         >
-          {file ? '🔄 Trocar arquivo' : '📂 Selecionar arquivo'}
+          <RefreshCw size={16} />
+          {file ? 'Trocar Arquivo' : 'Selecionar Arquivo'}
         </button>
+        
         <button
           type="button"
-          className="btn primary"
+          className="btn btn-primary"
           onClick={validateFile}
           disabled={!file || loading}
         >
-          {loading ? '⏳ Validando...' : '✓ Validar'}
+          {loading && <RefreshCw size={16} className="animate-spin" />}
+          {!loading && <CheckCircle size={16} />}
+          {loading ? 'Validando...' : 'Validar Planilha'}
         </button>
+
         <button
           type="button"
-          className="btn primary"
+          className="btn btn-primary"
+          style={{ background: 'var(--success)' }}
           onClick={importFile}
           disabled={!validationResult || loading}
-          style={{ opacity: (!validationResult || loading) ? '0.5' : '1' }}
         >
-          {loading ? '⏳ Importando...' : '✓ Importar'}
+          {loading && <RefreshCw size={16} className="animate-spin" />}
+          {!loading && <ArrowRight size={16} />}
+          {loading ? 'Importando...' : 'Confirmar Importação'}
         </button>
       </div>
 
@@ -244,142 +272,143 @@ export function ImportUpload() {
           gap: 1.5rem;
         }
 
-        .drop-zone-wrapper {
-          width: 100%;
-        }
-
         .drop-zone {
-          border: 2px dashed rgba(0, 217, 255, 0.4);
-          border-radius: var(--radius);
-          padding: 3.5rem 2rem;
+          border: 2px dashed var(--border);
+          border-radius: var(--radius-lg);
+          padding: 3rem 2rem;
           text-align: center;
           cursor: pointer;
-          transition: all 0.3s ease;
-          background: linear-gradient(135deg, rgba(20, 27, 46, 0.5) 0%, rgba(14, 19, 40, 0.8) 100%);
+          transition: var(--transition);
+          background: var(--surface);
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          min-height: 220px;
-          position: relative;
-          overflow: hidden;
-        }
-
-        .drop-zone::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: radial-gradient(circle at center, rgba(0, 217, 255, 0.05) 0%, transparent 70%);
-          pointer-events: none;
+          min-height: 200px;
         }
 
         .drop-zone:hover {
           border-color: var(--accent);
-          background: linear-gradient(135deg, rgba(20, 27, 46, 0.7) 0%, rgba(0, 217, 255, 0.1) 100%);
+          background: var(--surface-hover);
         }
 
         .drop-zone.dragging {
           border-color: var(--accent);
-          background: linear-gradient(135deg, rgba(0, 217, 255, 0.15) 0%, rgba(0, 217, 255, 0.08) 100%);
-          transform: scale(1.02);
+          background: var(--accent-glow);
+          transform: scale(1.01);
         }
 
         .drop-zone.has-file {
           border-color: var(--success);
-          background: linear-gradient(135deg, rgba(81, 207, 102, 0.1) 0%, rgba(20, 27, 46, 0.8) 100%);
+          background: rgba(16, 185, 129, 0.05);
         }
 
-        .drop-icon {
-          font-size: 3rem;
-          display: block;
+        .drop-icon-wrapper {
+          color: var(--text-muted);
           margin-bottom: 1rem;
-          animation: floating 3s ease-in-out infinite;
+          transition: var(--transition);
         }
 
-        @keyframes floating {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-10px); }
+        .drop-zone:hover .drop-icon-wrapper {
+          color: var(--accent);
+          transform: translateY(-5px);
         }
 
-        .file-icon {
-          font-size: 2.2rem;
-          display: block;
-          margin-bottom: 0.75rem;
+        .file-icon-wrapper {
+          margin-bottom: 0.5rem;
         }
 
         .file-info {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 0.75rem;
-          position: relative;
-          z-index: 1;
-        }
-
-        .file-info div {
-          text-align: center;
+          gap: 0.5rem;
         }
 
         .file-info strong {
           display: block;
+          font-size: 1rem;
           color: var(--text);
-          font-size: 1.1rem;
-          margin-bottom: 0.2rem;
         }
 
         .file-info small {
-          display: block;
-          color: var(--muted);
-          font-size: 0.85rem;
-        }
-
-        .drop-content {
-          position: relative;
-          z-index: 1;
+          color: var(--text-muted);
         }
 
         .drop-content p {
-          margin: 0.5rem 0 0.25rem;
+          margin-bottom: 0.25rem;
           font-weight: 600;
-          color: var(--text);
-          font-size: 1.05rem;
+          font-size: 1.1rem;
         }
 
         .drop-content small {
-          color: var(--muted);
-          font-size: 0.85rem;
+          color: var(--text-muted);
+        }
+
+        .alert {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 1rem;
+          border-radius: var(--radius-md);
+          font-size: 0.9rem;
+          font-weight: 500;
+        }
+
+        .alert-danger {
+          background: rgba(239, 68, 68, 0.1);
+          color: var(--danger);
+          border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .alert-success {
+          background: rgba(16, 185, 129, 0.1);
+          color: var(--success);
+          border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .validation-card {
+          margin-top: 0.5rem;
+        }
+
+        .validation-details {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+
+        .detail-item {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.95rem;
+        }
+
+        .detail-item .label {
+          color: var(--text-muted);
         }
 
         .button-group {
           display: flex;
-          gap: 0.75rem;
-          flex-wrap: wrap;
-          margin-top: 0.5rem;
+          gap: 1rem;
+          margin-top: 1rem;
         }
 
         .button-group .btn {
           flex: 1;
-          min-width: 140px;
         }
 
-        @media (max-width: 600px) {
-          .drop-zone {
-            padding: 2.5rem 1.5rem;
-            min-height: 180px;
-          }
-
+        @media (max-width: 640px) {
           .button-group {
             flex-direction: column;
           }
+        }
 
-          .button-group .btn {
-            flex: 1;
-            min-width: unset;
-          }
-
-          .drop-icon {
-            font-size: 2.2rem;
-          }
+        @keyframes animate-spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin {
+          animation: animate-spin 1s linear infinite;
         }
       `}</style>
     </div>

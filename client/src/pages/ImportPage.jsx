@@ -1,120 +1,204 @@
+import { 
+  FileUp, 
+  HelpCircle, 
+  Lightbulb, 
+  Table as TableIcon, 
+  Info,
+  CheckCircle2,
+  Download,
+  AlertCircle,
+  Zap,
+  ArrowRight,
+  ShieldCheck,
+  ClipboardList
+} from 'lucide-react'
 import { ImportUploadItem } from '../components/ImportUploadItem'
 
+/**
+ * Página de Importação de Dados
+ * Permite a carga massiva de headsets e computadores via arquivos Excel.
+ */
 export function ImportPage() {
   return (
-    <div className="page">
-      <div className="page-head">
-        <h2>📥 Importar Dados</h2>
-        <p className="muted">Importação simples: validar arquivo e depois importar.</p>
-      </div>
+    <div className="page-fade-in">
+      <header className="page-header-premium" style={{ marginBottom: '2.5rem' }}>
+        <div className="row gap" style={{ marginBottom: '0.75rem' }}>
+          <span className="badge badge-info">Módulo de Administração</span>
+        </div>
+        <h2 className="page-title">Sincronização de Inventário</h2>
+        <p className="page-subtitle" style={{ marginBottom: 0 }}>Importe ativos de forma massiva com validação automática de integridade e histórico.</p>
+      </header>
 
-      <div className="page-content">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
-          <ImportUploadItem tipo="headsets" />
-          <ImportUploadItem tipo="computadores" />
+      <div className="page-content-inner">
+        {/* Guia Visual do Processo */}
+        <div className="card" style={{ marginBottom: '2rem', padding: '1.5rem' }}>
+          <div className="row gap" style={{ marginBottom: '1.5rem' }}>
+            <Zap size={20} className="text-accent" />
+            <h4 style={{ margin: 0 }}>Fluxo de Trabalho Inteligente</h4>
+          </div>
+          <div className="import-workflow-steps">
+            <div className="step-item">
+              <div className="step-number">1</div>
+              <div className="step-content">
+                <strong>Preparação</strong>
+                <p>Organize sua planilha seguindo as colunas do template oficial.</p>
+              </div>
+              <ArrowRight className="step-arrow" size={20} />
+            </div>
+            <div className="step-item">
+              <div className="step-number">2</div>
+              <div className="step-content">
+                <strong>Análise</strong>
+                <p>O sistema valida lacres duplicados e vínculos de operadores ativos.</p>
+              </div>
+              <ArrowRight className="step-arrow" size={20} />
+            </div>
+            <div className="step-item">
+              <div className="step-number">3</div>
+              <div className="step-content">
+                <strong>Efetivação</strong>
+                <p>Após a confirmação, o banco é atualizado e o histórico é gerado.</p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div style={{ marginTop: '2rem', padding: '1.25rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-          <h3 style={{ margin: '0 0 1rem 0', color: 'var(--accent)', fontSize: '1rem' }}>
-            📋 Passo a passo rápido
-          </h3>
-          <ol style={{ margin: '0', paddingLeft: '1.5rem', color: 'var(--muted)', lineHeight: '1.6' }}>
-            <li style={{ marginBottom: '0.5rem' }}>Use o template abaixo (mesmos nomes de colunas)</li>
-            <li style={{ marginBottom: '0.5rem' }}>Escolha Headsets ou Computadores e selecione o arquivo `.xlsx`</li>
-            <li style={{ marginBottom: '0.5rem' }}>Clique em <strong style={{ color: 'var(--text)' }}>Validar</strong></li>
-            <li style={{ marginBottom: '0.5rem' }}>Se estiver sem erro, clique em <strong style={{ color: 'var(--text)' }}>Importar</strong></li>
-            <li>Lacre existente é atualizado (não duplica)</li>
-          </ol>
+        {/* Áreas de Importação */}
+        <div className="inner-grid inner-grid-2" style={{ marginBottom: '2rem' }}>
+          <div className="card h-full">
+            <div className="row" style={{ justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <h4 className="card-title" style={{ margin: 0 }}>
+                <ClipboardList size={20} /> 
+                Lote de Headsets
+              </h4>
+              <span className="badge badge-info">Excel (.xlsx)</span>
+            </div>
+            <p className="small muted" style={{ marginBottom: '1.5rem' }}>Ideal para cadastrar novos lacres ou atualizar status de equipamentos em massa.</p>
+            <ImportUploadItem tipo="headsets" />
+          </div>
+          
+          <div className="card h-full">
+            <div className="row" style={{ justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <h4 className="card-title" style={{ margin: 0 }}>
+                <ShieldCheck size={20} /> 
+                Lote de Computadores
+              </h4>
+              <span className="badge badge-info">Excel (.xlsx)</span>
+            </div>
+            <p className="small muted" style={{ marginBottom: '1.5rem' }}>Gerenciamento de estações de trabalho vinculadas por Hostname e Serial.</p>
+            <ImportUploadItem tipo="computadores" />
+          </div>
         </div>
 
-        <div style={{ marginTop: '1.5rem', padding: '1.25rem', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: 'var(--radius)' }}>
-          <h3 style={{ margin: '0 0 0.75rem 0', color: 'var(--accent)', fontSize: '0.95rem' }}>💡 Regras importantes</h3>
-          <ul style={{ margin: '0', paddingLeft: '1.5rem', color: 'var(--muted)', fontSize: '0.9rem', lineHeight: '1.6' }}>
-            <li>Tamanho máximo do arquivo: <strong style={{ color: 'var(--text)' }}>5 MB</strong></li>
-            <li>Formato suportado: <strong style={{ color: 'var(--text)' }}>Excel (.xlsx)</strong> apenas</li>
-            <li>Marca de headset: <strong style={{ color: 'var(--text)' }}>intelbras</strong> ou <strong style={{ color: 'var(--text)' }}>plantronics</strong></li>
-            <li>Lacre é chave única: se já existir, o sistema atualiza o headset em vez de duplicar</li>
-            <li>Número de série (quando informado) não pode conflitar com outro lacre</li>
-            <li>Use <strong style={{ color: 'var(--text)' }}>defeito</strong> para itens com problema e <strong style={{ color: 'var(--text)' }}>retorno_manutencao</strong> para voltar ao estoque</li>
-            <li>Se já houver operador no lacre e a planilha tentar trocar sem baixa, o sistema bloqueia e alerta</li>
-          </ul>
-        </div>
+        {/* Templates e Regras Técnicas */}
+        <div className="dashboard-grid">
+          <div className="card">
+            <h4 className="card-title" style={{ color: 'var(--warning)' }}>
+              <Lightbulb size={20} /> 
+              Regras de Negócio
+            </h4>
+            <ul className="premium-list small">
+              <li><strong>Headsets:</strong> O Lacre é o identificador único. Se já existir, os dados serão atualizados.</li>
+              <li><strong>Operadores:</strong> Não é possível vincular um headset a um operador que já possui outro equipamento ativo.</li>
+              <li><strong>Status:</strong> Use letras minúsculas (ex: <code>estoque</code>, <code>em_uso</code>, <code>defeito</code>).</li>
+              <li><strong>Categorias:</strong> São atribuídas automaticamente pelo sistema com base no status informado.</li>
+            </ul>
+          </div>
 
-        <div style={{ marginTop: '1.5rem', padding: '1.25rem', background: 'rgba(168, 85, 247, 0.08)', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: 'var(--radius)' }}>
-          <h3 style={{ margin: '0 0 0.75rem 0', color: 'var(--accent)', fontSize: '0.95rem' }}>
-            📝 Template Headsets (funcional)
-          </h3>
-          <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
-            <code style={{ background: 'rgba(0,0,0,0.2)', padding: '0.5rem', borderRadius: '5px', display: 'block', marginBottom: '1rem', overflow: 'auto' }}>
-              MATRÍCULA (opcional) | LACRE | MARCA (Intelbras/Plantronics) | Nº SÉRIE (opcional) | STATUS | CATEGORIA | OBSERVAÇÕES
-            </code>
-            <p style={{ margin: '0 0 0.5rem 0', color: 'var(--text)' }}>
-              Valores de <strong>STATUS</strong>: em_uso, estoque, defeito, emprestimo, entrega,
-              manutencao, reserva, desligado, retorno_manutencao
-            </p>
-            <p style={{ margin: '0 0 1rem 0', color: 'var(--text)' }}>
-              Valores de <strong>CATEGORIA</strong>: estoque, emprestimo, entrega, manutencao, operacao
-            </p>
-            <div style={{ overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, marginBottom: '1rem' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+          <div className="card">
+            <h4 className="card-title">
+              <TableIcon size={20} /> 
+              Layout da Planilha (Headsets)
+            </h4>
+            <div className="table-container" style={{ margin: '0.5rem 0 1rem', background: 'rgba(0,0,0,0.2)', border: 'none' }}>
+              <table style={{ minWidth: 'auto', fontSize: '0.75rem' }}>
                 <thead>
-                  <tr style={{ background: 'rgba(0,0,0,0.15)', color: 'var(--text)' }}>
-                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>MATRÍCULA</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>LACRE</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>MARCA</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>Nº SÉRIE</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>STATUS</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>CATEGORIA</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>OBSERVAÇÕES</th>
+                  <tr>
+                    <th>LACRE</th>
+                    <th>MATRÍCULA</th>
+                    <th>MARCA</th>
+                    <th>SÉRIE</th>
+                    <th>STATUS</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td style={{ padding: '0.5rem' }}>123456</td>
-                    <td style={{ padding: '0.5rem' }}>LC-0001</td>
-                    <td style={{ padding: '0.5rem' }}>intelbras</td>
-                    <td style={{ padding: '0.5rem' }}>SN-8899</td>
-                    <td style={{ padding: '0.5rem' }}>em_uso</td>
-                    <td style={{ padding: '0.5rem' }}>operacao</td>
-                    <td style={{ padding: '0.5rem' }}>Operador ativo</td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '0.5rem' }}> </td>
-                    <td style={{ padding: '0.5rem' }}>LC-0040</td>
-                    <td style={{ padding: '0.5rem' }}>plantronics</td>
-                    <td style={{ padding: '0.5rem' }}> </td>
-                    <td style={{ padding: '0.5rem' }}>estoque</td>
-                    <td style={{ padding: '0.5rem' }}>estoque</td>
-                    <td style={{ padding: '0.5rem' }}>Disponível para reposição</td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '0.5rem' }}> </td>
-                    <td style={{ padding: '0.5rem' }}>LC-0099</td>
-                    <td style={{ padding: '0.5rem' }}>plantronics</td>
-                    <td style={{ padding: '0.5rem' }}>SN-0099</td>
-                    <td style={{ padding: '0.5rem' }}>defeito</td>
-                    <td style={{ padding: '0.5rem' }}>manutencao</td>
-                    <td style={{ padding: '0.5rem' }}>Microfone falhando</td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '0.5rem' }}> </td>
-                    <td style={{ padding: '0.5rem' }}>LC-0099</td>
-                    <td style={{ padding: '0.5rem' }}>plantronics</td>
-                    <td style={{ padding: '0.5rem' }}>SN-0099</td>
-                    <td style={{ padding: '0.5rem' }}>retorno_manutencao</td>
-                    <td style={{ padding: '0.5rem' }}>estoque</td>
-                    <td style={{ padding: '0.5rem' }}>Retorno da assistência</td>
+                    <td className="mono text-accent">LC-001</td>
+                    <td className="muted">12345</td>
+                    <td>intelbras</td>
+                    <td className="mono">SN-X</td>
+                    <td>em_uso</td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <p style={{ marginBottom: '0.75rem', fontWeight: 'bold', color: 'var(--text)' }}>Template Computadores:</p>
-            <code style={{ background: 'rgba(0,0,0,0.2)', padding: '0.5rem', borderRadius: '5px', display: 'block', overflow: 'auto' }}>
-              PA | HOSTNAME | Nº SÉRIE | STATUS
-            </code>
+            <div className="row gap" style={{ padding: '0.75rem', background: 'var(--accent-glow)', borderRadius: 'var(--radius-md)' }}>
+              <Info size={16} className="text-accent" />
+              <p className="small" style={{ margin: 0 }}>Para <strong>PCs</strong>, use as colunas: <code>PA</code>, <code>HOSTNAME</code>, <code>SERIAL_NUMBER</code> e <code>STATUS</code>.</p>
+            </div>
           </div>
         </div>
       </div>
+
+      <style>{`
+        .import-workflow-steps {
+          display: flex;
+          align-items: center;
+          gap: 1.5rem;
+          justify-content: space-between;
+        }
+
+        .step-item {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          flex: 1;
+        }
+
+        .step-number {
+          width: 32px;
+          height: 32px;
+          background: var(--accent);
+          color: white;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: 0.875rem;
+          flex-shrink: 0;
+          box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        .step-content strong {
+          display: block;
+          font-size: 0.875rem;
+          color: var(--text);
+        }
+
+        .step-content p {
+          font-size: 0.75rem;
+          color: var(--text-muted);
+          margin: 0;
+          line-height: 1.3;
+        }
+
+        .step-arrow {
+          color: var(--border);
+        }
+
+        @media (max-width: 768px) {
+          .import-workflow-steps {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+          .step-arrow {
+            display: none;
+          }
+        }
+
+        .h-full { height: 100%; }
+      `}</style>
     </div>
   )
 }

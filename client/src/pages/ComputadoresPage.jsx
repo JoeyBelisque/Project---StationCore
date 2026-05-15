@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { 
+  Plus, 
+  Search, 
+  RefreshCcw, 
+  Monitor, 
+  Edit3, 
+  Trash2, 
+  MapPin, 
+  Hash,
+  AlertTriangle
+} from 'lucide-react'
 import { PC_STATUS, labelByValue } from '../constants/status'
 import { Modal } from '../components/Modal'
 import { Pagination } from '../components/Pagination'
+import { useToast } from '../components/Toast'
 import {
   criarComputador,
   listarComputadores,
@@ -11,6 +23,20 @@ import {
 
 const PAGE_SIZE = 25
 
+/**
+ * Mapeia o status do PC para classes de badge.
+ */
+function getBadgeClass(status) {
+  const map = {
+    em_uso: 'badge-success',
+    manutencao: 'badge-warning',
+    inutilizavel: 'badge-danger',
+    estoque: 'badge-info',
+    troca_pendente: 'badge-warning',
+  }
+  return `badge ${map[status] || 'badge-info'}`
+}
+
 const emptyForm = () => ({
   id: null,
   hostname: '',
@@ -19,15 +45,12 @@ const emptyForm = () => ({
   pa: '',
 })
 
+/**
+ * Gestão de Computadores por PA
+ * Controle de hostnames, números de série e localização física (PA).
+ */
 export function ComputadoresPage() {
-  // Mostra data/hora de atualização com fallback seguro para dados antigos/incompletos.
-  function formatUpdatedAt(value) {
-    if (!value) return '—'
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return '—'
-    return date.toLocaleString('pt-BR')
-  }
-
+  const { addToast } = useToast()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -36,6 +59,14 @@ export function ComputadoresPage() {
   const [page, setPage] = useState(0)
   const [modal, setModal] = useState(null)
 
+  // Formatação de data amigável
+  function formatUpdatedAt(value) {
+    if (!value) return '—'
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('pt-BR')
+  }
+
+  // Carregamento de dados
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -43,26 +74,22 @@ export function ComputadoresPage() {
       const data = await listarComputadores()
       setRows(Array.isArray(data) ? data : [])
     } catch (e) {
-      setError(e.message || 'Falha ao carregar')
+      setError(e.message || 'Falha ao carregar dados do servidor.')
       setRows([])
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => {
-    load()
-  }, [load])
+  useEffect(() => { load() }, [load])
 
+  // Lógica de busca e filtragem
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
     return rows.filter((r) => {
       if (statusFilter && String(r.status) !== statusFilter) return false
       if (!s) return true
-      const blob = [r.hostname, r.serial_number, r.pa, r.status]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
+      const blob = `${r.hostname} ${r.serial_number} ${r.pa} ${r.status}`.toLowerCase()
       return blob.includes(s)
     })
   }, [rows, q, statusFilter])
@@ -77,225 +104,148 @@ export function ComputadoresPage() {
     setPage((p) => Math.min(p, maxPage))
   }, [filtered.length])
 
+  // Handlers de formulário
   async function handleSubmit(e) {
     e.preventDefault()
-    const fd = new FormData(e.target)
+    const f = modal.form
     const body = {
-      hostname: String(fd.get('hostname') || '').trim(),
-      serial_number: String(fd.get('serial_number') || '').trim(),
-      status: String(fd.get('status') || 'em_uso'),
-      pa: String(fd.get('pa') || '').trim(),
+      hostname: f.hostname.trim(),
+      serial_number: f.serial_number.trim(),
+      status: f.status,
+      pa: f.pa.trim(),
     }
     try {
-      if (modal.form.id) {
-        await atualizarComputador(modal.form.id, body)
-      } else {
-        await criarComputador(body)
-      }
+      if (f.id) await atualizarComputador(f.id, body)
+      else await criarComputador(body)
       setModal(null)
+      addToast('Computador salvo com sucesso!')
       await load()
-    } catch (err) {
-      alert(err.message || 'Erro ao salvar')
-    }
+    } catch (err) { addToast(err.message || 'Erro ao salvar', 'error') }
   }
 
-  function openNew() {
-    setModal({ mode: 'edit', form: emptyForm() })
-  }
-
-  function openEdit(row) {
-    setModal({ mode: 'edit', form: { ...emptyForm(), ...row } })
-  }
+  const openNew = () => setModal({ mode: 'edit', form: emptyForm() })
+  const openEdit = (row) => setModal({ mode: 'edit', form: { ...emptyForm(), ...row } })
 
   async function handleDelete(id) {
-    if (!confirm('Remover este computador do cadastro?')) return
+    if (!confirm('Remover este computador do sistema?')) return
     try {
       await removerComputador(id)
+      addToast('Computador removido com sucesso!')
       await load()
-    } catch (err) {
-      alert(err.message || 'Erro ao excluir')
-    }
+    } catch (err) { addToast(err.message || 'Erro ao excluir', 'error') }
   }
 
   return (
-    <div className="page">
-      <div className="page-head row">
+    <div className="page-fade-in">
+      <header className="page-header-premium" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
         <div>
-          <h2>Computadores por PA</h2>
-          <p className="muted">
-            Hostname, número de série e PA. Use busca e filtros para achar equipamentos entre milhares
-            de registros.
-          </p>
+          <h2 className="page-title">Computadores</h2>
+          <p className="page-subtitle" style={{ marginBottom: 0 }}>Gestão de postos de atendimento (PA) e equipamentos.</p>
         </div>
         <div className="row gap">
-          <button type="button" className="btn" onClick={load} disabled={loading}>
-            Atualizar
+          <button className="btn btn-secondary" onClick={load} disabled={loading}>
+            <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
+            <span className="hide-mobile">Atualizar</span>
           </button>
-          <button
-            type="button"
-            className="btn primary"
-            onClick={openNew}
-            disabled={!!error}
-          >
-            Novo computador
+          <button className="btn btn-primary" onClick={openNew}>
+            <Plus size={16} />
+            Novo PC
           </button>
         </div>
-      </div>
+      </header>
 
       {error && (
-        <div className="banner error" role="alert">
-          <strong>Backend:</strong> {error}. Confirme se o servidor está em{' '}
-          <code>http://localhost:3000</code> e o banco configurado.
+        <div className="badge badge-danger w-full" style={{ marginBottom: '1.5rem', padding: '1rem', justifyContent: 'center' }}>
+          <AlertTriangle size={16} style={{ marginRight: 8 }} />
+          <strong>Erro:</strong> {error}
         </div>
       )}
 
-      <div className="toolbar row wrap">
-        <input
-          type="search"
-          className="input search grow"
-          placeholder="Buscar por hostname, série, PA…"
-          value={q}
-          onChange={(e) => {
-            setQ(e.target.value)
-            setPage(0)
-          }}
-          aria-label="Buscar computadores"
-        />
-        <select
-          className="input"
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value)
-            setPage(0)
-          }}
-          aria-label="Filtrar por status"
+      {/* Toolbar de Filtros */}
+      <div className="card toolbar-premium">
+        <div className="input-with-icon">
+          <Search size={18} className="icon" />
+          <input 
+            type="search" 
+            className="input w-full" 
+            placeholder="Buscar por Hostname, Série ou PA..." 
+            value={q}
+            onChange={(e) => { setQ(e.target.value); setPage(0); }}
+          />
+        </div>
+        <select 
+          className="input" 
+          value={statusFilter} 
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
         >
-          <option value="">Todos os status</option>
-          {PC_STATUS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
+          <option value="">Todos os Status</option>
+          {PC_STATUS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </div>
 
-      <div className="table-wrap">
-        {loading ? (
-          <p className="muted padded">Carregando…</p>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>PA</th>
-                <th>Hostname</th>
-                <th>Nº série</th>
-                <th>Status</th>
-                <th>Atualizado</th>
-                <th className="col-actions">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageItems.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="empty-cell">
-                    {rows.length === 0
-                      ? 'Nenhum computador cadastrado ou API indisponível.'
-                      : 'Nenhum resultado para o filtro atual.'}
+      <div className="table-container shadow-lg">
+        <table>
+          <thead>
+            <tr>
+              <th><MapPin size={14} style={{ marginRight: 4 }} /> PA</th>
+              <th>Hostname</th>
+              <th><Hash size={14} style={{ marginRight: 4 }} /> Nº Série</th>
+              <th>Status</th>
+              <th>Atualizado</th>
+              <th style={{ textAlign: 'right' }}>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={6} className="text-center py-8 muted">Carregando...</td></tr>
+            ) : pageItems.length === 0 ? (
+              <tr><td colSpan={6} className="text-center py-8 muted">Nenhum computador encontrado.</td></tr>
+            ) : (
+              pageItems.map((r) => (
+                <tr key={r.id}>
+                  <td><strong>{r.pa ?? '—'}</strong></td>
+                  <td><code className="mono text-accent">{r.hostname ?? '—'}</code></td>
+                  <td className="mono small">{r.serial_number ?? '—'}</td>
+                  <td>
+                    <span className={getBadgeClass(r.status)}>
+                      {labelByValue(PC_STATUS, r.status)}
+                    </span>
+                  </td>
+                  <td className="small muted">
+                    {formatUpdatedAt(r.updated_at ?? r.atualizadoEm ?? r.atualizado_em)}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <div className="row gap" style={{ justifyContent: 'flex-end' }}>
+                      <button className="btn btn-secondary btn-icon" onClick={() => openEdit(r)}>
+                        <Edit3 size={16} />
+                      </button>
+                      <button className="btn btn-secondary btn-icon text-danger" onClick={() => handleDelete(r.id)}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ) : (
-                pageItems.map((r) => (
-                  <tr key={r.id}>
-                    <td className="mono">{r.pa ?? '—'}</td>
-                    <td className="mono">{r.hostname ?? '—'}</td>
-                    <td className="mono">{r.serial_number ?? '—'}</td>
-                    <td>
-                      <span className={`badge pc-${r.status}`}>
-                        {labelByValue(PC_STATUS, r.status)}
-                      </span>
-                    </td>
-                    <td className="muted small">
-                      {/* Compatibilidade com payloads antigos e novos do backend. */}
-                      {formatUpdatedAt(r.updated_at ?? r.atualizadoEm ?? r.atualizado_em)}
-                    </td>
-                    <td className="col-actions">
-                      <button type="button" className="btn link" onClick={() => openEdit(r)}>
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        className="btn link danger"
-                        onClick={() => handleDelete(r.id)}
-                      >
-                        Excluir
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        )}
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
-      <Pagination
-        page={page}
-        pageSize={PAGE_SIZE}
-        total={filtered.length}
-        onPageChange={setPage}
-      />
+      <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
 
-      {modal && (
+      {modal?.mode === 'edit' && (
         <Modal
-          title={modal.form.id ? 'Editar computador' : 'Cadastrar computador'}
+          title={modal.form.id ? 'Editar Equipamento' : 'Cadastrar PC'}
           onClose={() => setModal(null)}
-          footer={
-            <>
-              <button type="button" className="btn" onClick={() => setModal(null)}>
-                Cancelar
-              </button>
-              <button type="submit" form="form-pc" className="btn primary">
-                Salvar
-              </button>
-            </>
-          }
+          footer={<><button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button><button type="submit" form="f-pc" className="btn btn-primary">Salvar</button></>}
         >
-          <form id="form-pc" className="form-grid" onSubmit={handleSubmit}>
-            <label>
-              PA (mesa / posto)
-              <input
-                name="pa"
-                className="input"
-                defaultValue={modal.form.pa}
-                required
-              />
-            </label>
-            <label>
-              Hostname
-              <input
-                name="hostname"
-                className="input mono"
-                defaultValue={modal.form.hostname}
-                required
-              />
-            </label>
-            <label>
-              Número de série
-              <input
-                name="serial_number"
-                className="input mono"
-                defaultValue={modal.form.serial_number}
-                required
-              />
-            </label>
-            <label className="full">
-              Status
-              <select name="status" className="input" defaultValue={modal.form.status}>
-                {PC_STATUS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
+          <form id="f-pc" className="form-grid" onSubmit={handleSubmit}>
+            <label>PA (Mesa / Posto)<input className="input" value={modal.form.pa} onChange={e => setModal(m => ({...m, form: {...m.form, pa: e.target.value}}))} required /></label>
+            <label>Hostname<input className="input mono" value={modal.form.hostname} onChange={e => setModal(m => ({...m, form: {...m.form, hostname: e.target.value}}))} required /></label>
+            <label>Número de Série<input className="input mono" value={modal.form.serial_number} onChange={e => setModal(m => ({...m, form: {...m.form, serial_number: e.target.value}}))} required /></label>
+            <label className="full">Status
+              <select className="input" value={modal.form.status} onChange={e => setModal(m => ({...m, form: {...m.form, status: e.target.value}}))}>
+                {PC_STATUS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </label>
           </form>

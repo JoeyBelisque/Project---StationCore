@@ -17,6 +17,20 @@ export const createComputador = async (data) => {
     [hostname, serial_number, status, pa]
   );
 
-  // RETURNING * devolve a linha criada (inclui id e created_at gerados pelo Postgres).
   return result.rows[0];
+};
+
+export const updateComputador = async (id, data) => {
+  const { hostname, serial_number, status, pa } = data;
+
+  const result = await pool.query(
+    "UPDATE computadores SET hostname = $1, serial_number = $2, status = $3, pa = $4, updated_at = NOW() WHERE id = $5 RETURNING *",
+    [hostname, serial_number, status, pa, id]
+  );
+
+  return result.rows[0];
+};
+
+export const deleteComputador = async (id) => {
+  await pool.query("DELETE FROM computadores WHERE id = $1", [id]);
 };

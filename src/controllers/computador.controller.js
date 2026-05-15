@@ -13,3 +13,15 @@ export const criar = async (req, res) => {
   const novo = await Computador.createComputador(req.body);
   res.json(novo);
 };
+
+export const atualizar = async (req, res) => {
+  const { id } = req.params;
+  const atualizado = await Computador.updateComputador(id, req.body);
+  res.json(atualizado);
+};
+
+export const excluir = async (req, res) => {
+  const { id } = req.params;
+  await Computador.deleteComputador(id);
+  res.json({ success: true });
+};

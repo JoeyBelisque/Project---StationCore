@@ -32,6 +32,13 @@ export async function trocarLacreHeadset(id, body) {
   })
 }
 
+export async function trocarHeadset(id, body) {
+  return fetchJson(`/headsets/${encodeURIComponent(id)}/trocar`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export async function listarHistoricoHeadset(id) {
   return fetchJson(`/headsets/${encodeURIComponent(id)}/historico`)
 }

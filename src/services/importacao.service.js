@@ -26,9 +26,17 @@ function normalizeStatus(value, fallback) {
   return normalized || fallback;
 }
 
-function normalizeHeadsetLifecycle(rawStatus, rawCategoria, rawObservacao = "") {
+function deriveCategoria(status) {
+  const s = String(status ?? "").trim().toLowerCase();
+  if (s === 'em_uso') return 'operacao';
+  if (s === 'emprestimo') return 'emprestimo';
+  if (s === 'entrega') return 'entrega';
+  if (s === 'defeito' || s === 'manutencao') return 'manutencao';
+  return 'estoque';
+}
+
+function normalizeHeadsetLifecycle(rawStatus, rawObservacao = "") {
   const statusNorm = normalizeStatus(rawStatus, "estoque");
-  const categoriaNorm = normalizeStatus(rawCategoria, "estoque");
   const observacao = normalizeText(rawObservacao);
 
   if (["retorno_manutencao", "retornou_manutencao", "voltou_manutencao"].includes(statusNorm)) {
@@ -43,13 +51,12 @@ function normalizeHeadsetLifecycle(rawStatus, rawCategoria, rawObservacao = "") 
   }
 
   if (statusNorm === "defeito") {
-    const categoriaFinal = categoriaNorm === "estoque" ? "manutencao" : categoriaNorm;
-    return { status: "defeito", categoria: categoriaFinal, observacoes: observacao };
+    return { status: "defeito", categoria: "manutencao", observacoes: observacao };
   }
 
   return {
     status: statusNorm,
-    categoria: categoriaNorm,
+    categoria: deriveCategoria(statusNorm),
     observacoes: observacao,
   };
 }
@@ -212,7 +219,7 @@ function collectHeadsets(rows) {
     const lacre = normalizeText(raw.lacre);
     const marca = normalizeText(raw.marca);
     const numero_serie = normalizeText(raw.numero_serie);
-    const lifecycle = normalizeHeadsetLifecycle(raw.status, raw.categoria, raw.observacoes);
+    const lifecycle = normalizeHeadsetLifecycle(raw.status, raw.observacoes);
     const status = lifecycle.status;
     const categoria = lifecycle.categoria;
     const observacoes = lifecycle.observacoes;
@@ -220,9 +227,6 @@ function collectHeadsets(rows) {
     if (!lacre) errors.push(rowError("headsets", line, "lacre é obrigatório"));
     if (!STATUS_HEADSET.has(status)) {
       errors.push(rowError("headsets", line, `status inválido: ${status}`));
-    }
-    if (!CATEGORIA_HEADSET.has(categoria)) {
-      errors.push(rowError("headsets", line, `categoria inválida: ${categoria}`));
     }
     if (marca && !MARCAS_PERMITIDAS.has(marca.toLowerCase())) {
       errors.push(rowError("headsets", line, `marca inválida: ${marca}. Use Intelbras ou Plantronics`));
@@ -420,13 +424,14 @@ async function persistHeadsets(headsets) {
       );
 
       if (existing.rowCount === 0) {
+        const categoriaFinal = deriveCategoria(row.status);
         const inserted = await client.query(
           `
             INSERT INTO headsets (matricula, lacre, marca, numero_serie, status, categoria, observacoes)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
           `,
-          [row.matricula, row.lacre, row.marca, row.numero_serie || null, row.status, row.categoria, row.observacoes]
+          [row.matricula, row.lacre, row.marca, row.numero_serie || null, row.status, categoriaFinal, row.observacoes]
         );
         await client.query(
           `INSERT INTO headset_historico (headset_id, acao, campo, valor_novo, observacao)
@@ -444,7 +449,7 @@ async function persistHeadsets(headsets) {
 
         const proximaMatricula = row.matricula || matriculaAtual;
         const proximoStatus = row.status || atual.status || "estoque";
-        const proximaCategoria = row.categoria || atual.categoria || "estoque";
+        const proximaCategoria = deriveCategoria(proximoStatus);
         await client.query(
           `
             UPDATE headsets

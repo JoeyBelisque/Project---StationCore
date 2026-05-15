@@ -10,6 +10,7 @@ import {
   historico,
   listar,
   remover,
+  trocar,
 } from "../controllers/headset.controller.js";
 
 const router = Router();
@@ -18,6 +19,7 @@ router.get("/", listar);
 router.post("/", criar);
 router.put("/:id", atualizar);
 router.patch("/:id/lacre", atualizarLacre);
+router.post("/:id/trocar", trocar);
 router.get("/:id/historico", historico);
 router.delete("/:id", remover);
 

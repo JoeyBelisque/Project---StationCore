@@ -1,6 +1,25 @@
 import { useState } from 'react'
+import { 
+  FileSpreadsheet, 
+  Check, 
+  AlertCircle, 
+  Loader2, 
+  UploadCloud, 
+  FileText,
+  BarChart3,
+  CheckCircle2,
+  XCircle,
+  ChevronDown,
+  ChevronUp,
+  AlertTriangle,
+  Info
+} from 'lucide-react'
 import { importarHeadsets, importarComputadores } from '../services/importacaoApi'
 
+/**
+ * Item de Upload para Importação
+ * Gerencia o estado de seleção, validação e envio de arquivos Excel.
+ */
 export function ImportUploadItem({ tipo = 'headsets' }) {
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -8,21 +27,23 @@ export function ImportUploadItem({ tipo = 'headsets' }) {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [showErrors, setShowErrors] = useState(false)
 
-  const tipoLabel = tipo === 'headsets' ? '🎧 Headsets' : '💻 Computadores'
-  const tipoNome = tipo === 'headsets' ? 'headsets' : 'computadores'
+  const isHeadset = tipo === 'headsets'
+  const tipoLabel = isHeadset ? 'Headsets' : 'Computadores'
 
+  // Validação básica de arquivo no cliente
   function handleFileSelect(selectedFile) {
     if (!selectedFile) return
 
     if (!selectedFile.name.endsWith('.xlsx')) {
-      setError('❌ Apenas arquivos .xlsx são permitidos!')
+      setError('Apenas arquivos Excel (.xlsx) são suportados.')
       setFile(null)
       return
     }
 
     if (selectedFile.size > 5 * 1024 * 1024) {
-      setError('❌ Arquivo muito grande (máximo 5MB)')
+      setError('O arquivo excede o limite de 5MB.')
       setFile(null)
       return
     }
@@ -31,332 +52,423 @@ export function ImportUploadItem({ tipo = 'headsets' }) {
     setError(null)
     setValidationResult(null)
     setSuccess(null)
+    setShowErrors(false)
   }
 
-  function handleDragOver(e) {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-
-  function handleDragLeave() {
-    setIsDragging(false)
-  }
-
-  function handleDrop(e) {
+  // Handlers para Drag & Drop
+  const onDragOver = (e) => { e.preventDefault(); setIsDragging(true); }
+  const onDragLeave = () => setIsDragging(false)
+  const onDrop = (e) => {
     e.preventDefault()
     setIsDragging(false)
-    const files = e.dataTransfer.files
-    if (files.length > 0) {
-      handleFileSelect(files[0])
-    }
+    if (e.dataTransfer.files.length > 0) handleFileSelect(e.dataTransfer.files[0])
   }
 
-  function handleInputChange(e) {
-    const files = e.target.files
-    if (files.length > 0) {
-      handleFileSelect(files[0])
-    }
-  }
-
+  // Validação no servidor
   async function validateFile() {
-    if (!file) {
-      setError('⚠️ Selecione um arquivo primeiro')
-      return
-    }
+    if (!file) return setError('Selecione um arquivo para validar.')
 
     setLoading(true)
     setError(null)
     setSuccess(null)
+    setValidationResult(null)
 
     try {
-      const importFunc = tipo === 'headsets' ? importarHeadsets : importarComputadores
+      const importFunc = isHeadset ? importarHeadsets : importarComputadores
       const result = await importFunc(file, 'validar')
-
-      setValidationResult(result)
-      const total = tipo === 'headsets' ? result.summary?.total_headsets : result.summary?.total_computadores
-      setSuccess(`✅ Validação OK: ${total || 0} registros encontrados`)
-    } catch (err) {
-      console.error('Erro na validação:', err)
-      const errorMsg = err.details?.error || err.message || 'Erro desconhecido'
-      setError(`❌ ${errorMsg}`)
-      if (err.details?.errors) {
-        console.error('Erros de validação:', err.details.errors)
+      
+      if (!result.ok && result.errors?.length > 0) {
+        setValidationResult(result)
+        setError(`${result.errors.length} inconsistências encontradas.`)
+      } else {
+        setValidationResult(result)
+        setSuccess(`Arquivo validado com sucesso!`)
       }
+    } catch (err) {
+      setError(err.details?.error || err.message || 'Erro na validação do arquivo.')
     } finally {
       setLoading(false)
     }
   }
 
+  // Importação definitiva
   async function importFile() {
-    if (!validationResult) {
-      setError('⚠️ Valide o arquivo primeiro')
-      return
-    }
+    if (!validationResult || !validationResult.ok) return setError('O arquivo possui erros que impedem a importação.')
 
-    const total = tipo === 'headsets' ? validationResult.summary?.total_headsets : validationResult.summary?.total_computadores
-
-    if (!window.confirm(`Tem certeza que quer importar ${total || 0} registros de ${tipoNome}?`)) {
-      return
-    }
+    const total = isHeadset ? (validationResult.summary?.total_headsets || validationResult.registros?.length) : (validationResult.summary?.total_computadores || validationResult.registros?.length)
+    if (!window.confirm(`Confirmar a importação de ${total || 0} ${tipoLabel.toLowerCase()}?`)) return
 
     setLoading(true)
     setError(null)
     setSuccess(null)
 
     try {
-      const importFunc = tipo === 'headsets' ? importarHeadsets : importarComputadores
+      const importFunc = isHeadset ? importarHeadsets : importarComputadores
       const result = await importFunc(file, 'importar')
-
-      setSuccess(`✅ ${result.message || 'Importação concluída!'} ${total || 0} registros inseridos.`)
+      setSuccess(`${result.message || 'Importação concluída com sucesso!'}`)
       setFile(null)
       setValidationResult(null)
-
-      // Reset após 3 segundos
-      setTimeout(() => {
-        setSuccess(null)
-      }, 3000)
     } catch (err) {
-      console.error('Erro na importação:', err)
-      const errorMsg = err.details?.message || err.details?.error || err.message || 'Erro desconhecido'
-      setError(`❌ ${errorMsg}`)
-      if (err.details?.errors) {
-        console.error('Erros de importação:', err.details.errors)
-      }
+      setError(err.details?.message || err.message || 'Erro durante a importação.')
     } finally {
       setLoading(false)
     }
   }
 
   const inputId = `file-input-${tipo}`
+  const hasValidationErrors = validationResult && !validationResult.ok && validationResult.errors?.length > 0
 
   return (
-    <div className="import-upload-item">
-      <h3 style={{ marginBottom: '1rem', color: 'var(--accent)', fontSize: '1.1rem' }}>{tipoLabel}</h3>
-
-      <div className="drop-zone-wrapper">
-        <div
-          className={`drop-zone ${isDragging ? 'dragging' : ''} ${file ? 'has-file' : ''}`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => document.getElementById(inputId).click()}
-        >
-          {file ? (
-            <div className="file-info">
-              <span className="file-icon">📄</span>
-              <div>
-                <strong>{file.name}</strong>
-                <small>{(file.size / 1024).toFixed(2)} KB</small>
-              </div>
+    <div className="import-card-item-v2">
+      <div 
+        className={`drop-zone-premium ${isDragging ? 'dragging' : ''} ${file ? 'has-file' : ''} ${hasValidationErrors ? 'has-errors' : ''}`}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        onClick={() => !loading && document.getElementById(inputId).click()}
+      >
+        {file ? (
+          <div className="file-preview-v2">
+            <div className="file-icon-box">
+              <FileSpreadsheet size={32} className={hasValidationErrors ? 'text-danger' : 'text-accent'} />
             </div>
-          ) : (
-            <div className="drop-content">
-              <span className="drop-icon">📁</span>
-              <p>Arraste um arquivo .xlsx aqui</p>
-              <small>ou clique para selecionar</small>
+            <div className="file-meta">
+              <strong title={file.name}>{file.name}</strong>
+              <span>{(file.size / 1024).toFixed(2)} KB • Pronto para análise</span>
             </div>
-          )}
-          <input
-            type="file"
-            accept=".xlsx"
-            onChange={handleInputChange}
-            style={{ display: 'none' }}
-            id={inputId}
-          />
-        </div>
+            {!loading && (
+              <button className="btn-remove-file" onClick={(e) => { e.stopPropagation(); setFile(null); setValidationResult(null); setError(null); }}>
+                <XCircle size={18} />
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="drop-prompt-v2">
+            <div className="upload-icon-circle">
+              <UploadCloud size={32} />
+            </div>
+            <div className="prompt-text">
+              <p>Arraste sua planilha aqui</p>
+              <small>ou clique para navegar nos arquivos</small>
+            </div>
+          </div>
+        )}
+        <input 
+          type="file" 
+          accept=".xlsx" 
+          onChange={(e) => handleFileSelect(e.target.files[0])} 
+          style={{ display: 'none' }} 
+          id={inputId} 
+          disabled={loading}
+        />
       </div>
 
-      {/* Erro */}
-      {error && <div className="banner error">{error}</div>}
-
-      {/* Sucesso */}
-      {success && (
-        <div style={{ padding: '0.75rem 1rem', borderRadius: '8px', background: 'rgba(74, 222, 128, 0.12)', border: '1px solid rgba(74, 222, 128, 0.35)', color: '#86efac', marginBottom: '1rem', marginTop: '1rem' }}>
-          {success}
-        </div>
-      )}
-
-      {/* Resultado da Validação */}
+      {/* Resultado da Validação / Erros */}
       {validationResult && (
-        <div style={{ background: 'var(--surface)', padding: '1rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)', marginTop: '1rem' }}>
-          <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.95rem', color: 'var(--accent)' }}>✓ Validação OK</h4>
-          <p style={{ margin: '0.5rem 0', color: 'var(--text)', fontSize: '0.9rem' }}>
-            <strong>Registros encontrados:</strong>{' '}
-            {tipo === 'headsets' ? validationResult.summary?.total_headsets : validationResult.summary?.total_computadores}
-          </p>
-          {validationResult.summary?.erros > 0 && (
-            <p style={{ margin: '0.5rem 0', color: '#fca5a5', fontSize: '0.9rem' }}>
-              <strong>Erros encontrados:</strong> {validationResult.summary.erros}
-            </p>
+        <div className={`validation-result-panel ${hasValidationErrors ? 'error' : 'success'}`}>
+          <div className="panel-header" onClick={() => hasValidationErrors && setShowErrors(!showErrors)}>
+            <div className="row gap">
+              {hasValidationErrors ? <AlertTriangle size={18} className="text-danger" /> : <CheckCircle2 size={18} className="text-success" />}
+              <div className="flex-1">
+                <strong>{hasValidationErrors ? 'Inconsistências Detectadas' : 'Validação Concluída'}</strong>
+                <p className="small muted">
+                  {hasValidationErrors 
+                    ? `${validationResult.errors.length} erro(s) impedem a importação` 
+                    : `${isHeadset ? validationResult.summary?.total_headsets : validationResult.summary?.total_computadores} registros prontos para o banco`}
+                </p>
+              </div>
+              {hasValidationErrors && (
+                <button className="btn-toggle-errors">
+                  {showErrors ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {hasValidationErrors && showErrors && (
+            <div className="error-list-scroll">
+              <table className="error-table">
+                <thead>
+                  <tr>
+                    <th>Linha</th>
+                    <th>Descrição do Erro</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {validationResult.errors.map((err, i) => (
+                    <tr key={i}>
+                      <td><span className="badge-line">{err.linha}</span></td>
+                      <td className="error-msg">{err.erro}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {!hasValidationErrors && (
+            <div className="validation-success-info">
+              <div className="info-row">
+                <Info size={14} />
+                <span>Os dados foram pré-processados e estão íntegros.</span>
+              </div>
+            </div>
           )}
         </div>
       )}
 
-      {/* Botões */}
-      <div className="button-group" style={{ marginTop: '1rem' }}>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => document.getElementById(inputId).click()}
-        >
-          {file ? '🔄 Trocar arquivo' : '📂 Selecionar arquivo'}
-        </button>
-        <button
-          type="button"
-          className="btn primary"
-          onClick={validateFile}
+      {/* Feedbacks de Status Gerais */}
+      {error && !hasValidationErrors && (
+        <div className="badge badge-danger w-full mt-1" style={{ padding: '0.75rem', justifyContent: 'center' }}>
+          <AlertCircle size={14} style={{ marginRight: 6 }} /> {error}
+        </div>
+      )}
+
+      {success && !validationResult && (
+        <div className="badge badge-success w-full mt-1" style={{ padding: '0.75rem', justifyContent: 'center' }}>
+          <CheckCircle2 size={14} style={{ marginRight: 6 }} /> {success}
+        </div>
+      )}
+
+      {/* Ações */}
+      <div className="row gap mt-1" style={{ marginTop: '1rem' }}>
+        <button 
+          className="btn btn-secondary flex-1" 
+          onClick={(e) => { e.stopPropagation(); validateFile(); }} 
           disabled={!file || loading}
         >
-          {loading ? '⏳ Validando...' : '✓ Validar'}
+          {loading ? <Loader2 size={16} className="animate-spin" /> : <BarChart3 size={16} />}
+          {loading ? 'Analisando...' : 'Validar Planilha'}
         </button>
-        <button
-          type="button"
-          className="btn primary"
-          onClick={importFile}
-          disabled={!validationResult || loading}
-          style={{ opacity: (!validationResult || loading) ? '0.5' : '1' }}
+        
+        <button 
+          className="btn btn-primary flex-1" 
+          onClick={(e) => { e.stopPropagation(); importFile(); }} 
+          disabled={!validationResult || !validationResult.ok || loading}
         >
-          {loading ? '⏳ Importando...' : '✓ Importar'}
+          {loading ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+          {loading ? 'Processando...' : 'Confirmar Importação'}
         </button>
       </div>
 
       <style>{`
-        .import-upload-item {
+        .import-card-item-v2 {
           display: flex;
           flex-direction: column;
-          gap: 1rem;
-          padding: 1.5rem;
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: var(--radius);
+          gap: 0.75rem;
         }
 
-        .import-upload-item .drop-zone {
-          border: 2px dashed rgba(0, 217, 255, 0.4);
-          border-radius: var(--radius);
-          padding: 2.5rem 2rem;
-          text-align: center;
+        .drop-zone-premium {
+          border: 2px dashed var(--border);
+          border-radius: var(--radius-lg);
+          padding: 1.5rem;
           cursor: pointer;
-          transition: all 0.3s ease;
-          background: linear-gradient(135deg, rgba(20, 27, 46, 0.5) 0%, rgba(14, 19, 40, 0.8) 100%);
+          transition: var(--transition);
+          background: rgba(var(--bg-rgb), 0.2);
+          min-height: 120px;
           display: flex;
-          flex-direction: column;
           align-items: center;
           justify-content: center;
-          min-height: 160px;
-          position: relative;
-          overflow: hidden;
         }
 
-        .import-upload-item .drop-zone::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: radial-gradient(circle at center, rgba(0, 217, 255, 0.05) 0%, transparent 70%);
-          pointer-events: none;
-        }
-
-        .import-upload-item .drop-zone:hover {
+        .drop-zone-premium:hover {
           border-color: var(--accent);
-          background: linear-gradient(135deg, rgba(20, 27, 46, 0.7) 0%, rgba(0, 217, 255, 0.1) 100%);
+          background: var(--accent-glow);
         }
 
-        .import-upload-item .drop-zone.dragging {
+        .drop-zone-premium.dragging {
           border-color: var(--accent);
-          background: linear-gradient(135deg, rgba(0, 217, 255, 0.15) 0%, rgba(0, 217, 255, 0.08) 100%);
+          background: var(--accent-glow);
           transform: scale(1.02);
         }
 
-        .import-upload-item .drop-zone.has-file {
-          border-color: var(--success);
-          background: linear-gradient(135deg, rgba(81, 207, 102, 0.1) 0%, rgba(20, 27, 46, 0.8) 100%);
+        .drop-zone-premium.has-file {
+          border-style: solid;
+          border-color: var(--accent);
+          background: rgba(14, 165, 233, 0.05);
         }
 
-        .import-upload-item .drop-icon {
-          font-size: 2.5rem;
-          display: block;
-          margin-bottom: 1rem;
-          animation: floating 3s ease-in-out infinite;
+        .drop-zone-premium.has-errors {
+          border-color: var(--danger);
+          background: rgba(239, 68, 68, 0.05);
         }
 
-        @keyframes floating {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-10px); }
-        }
-
-        .import-upload-item .file-info {
+        .file-preview-v2 {
           display: flex;
           align-items: center;
           gap: 1rem;
-          color: var(--text);
+          width: 100%;
+          position: relative;
         }
 
-        .import-upload-item .file-icon {
-          font-size: 2rem;
+        .file-icon-box {
+          width: 56px;
+          height: 56px;
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-md);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
         }
 
-        .import-upload-item .file-info strong {
+        .file-meta {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .file-meta strong {
           display: block;
-          margin-bottom: 0.25rem;
+          font-size: 0.9375rem;
+          color: var(--text);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
-        .import-upload-item .file-info small {
-          color: var(--muted);
-          font-size: 0.85rem;
+        .file-meta span {
+          display: block;
+          font-size: 0.75rem;
+          color: var(--text-muted);
+          margin-top: 2px;
         }
 
-        .import-upload-item .drop-content {
+        .btn-remove-file {
+          background: transparent;
+          border: none;
+          color: var(--text-muted);
+          cursor: pointer;
+          padding: 0.5rem;
+          border-radius: 50%;
+          transition: var(--transition);
+        }
+
+        .btn-remove-file:hover {
+          color: var(--danger);
+          background: rgba(239, 68, 68, 0.1);
+        }
+
+        .drop-prompt-v2 {
           display: flex;
           flex-direction: column;
           align-items: center;
+          gap: 1rem;
+          text-align: center;
         }
 
-        .import-upload-item .drop-content p {
-          margin: 0.5rem 0;
+        .upload-icon-circle {
+          width: 56px;
+          height: 56px;
+          background: var(--surface-hover);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-muted);
+          transition: var(--transition);
+        }
+
+        .drop-zone-premium:hover .upload-icon-circle {
+          color: var(--accent);
+          background: var(--accent-glow);
+          transform: translateY(-4px);
+        }
+
+        .prompt-text p {
+          font-size: 0.9375rem;
+          font-weight: 600;
           color: var(--text);
         }
 
-        .import-upload-item .drop-content small {
-          color: var(--muted);
-          font-size: 0.9rem;
+        .prompt-text small {
+          color: var(--text-muted);
         }
 
-        .import-upload-item .banner {
-          padding: 0.75rem 1rem;
-          border-radius: 8px;
-          margin-top: 1rem;
+        .validation-result-panel {
+          border-radius: var(--radius-md);
+          border: 1px solid var(--border);
+          overflow: hidden;
+          background: var(--surface);
         }
 
-        .import-upload-item .banner.error {
-          background: rgba(239, 68, 68, 0.12);
-          border: 1px solid rgba(239, 68, 68, 0.35);
-          color: #fca5a5;
+        .validation-result-panel.error { border-color: rgba(239, 68, 68, 0.3); }
+        .validation-result-panel.success { border-color: rgba(16, 185, 129, 0.3); }
+
+        .panel-header {
+          padding: 0.875rem;
+          cursor: pointer;
+          transition: var(--transition);
         }
 
-        .import-upload-item .button-group {
+        .panel-header:hover {
+          background: var(--surface-hover);
+        }
+
+        .btn-toggle-errors {
+          background: transparent;
+          border: none;
+          color: var(--text-muted);
+        }
+
+        .error-list-scroll {
+          max-height: 200px;
+          overflow-y: auto;
+          border-top: 1px solid var(--border-light);
+          background: rgba(239, 68, 68, 0.02);
+        }
+
+        .error-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 0.8125rem;
+        }
+
+        .error-table th {
+          padding: 0.5rem 0.875rem;
+          text-align: left;
+          background: var(--bg);
+          color: var(--text-muted);
+          position: sticky;
+          top: 0;
+          font-size: 0.7rem;
+        }
+
+        .error-table td {
+          padding: 0.625rem 0.875rem;
+          border-bottom: 1px solid var(--border-light);
+        }
+
+        .badge-line {
+          background: var(--surface-hover);
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-weight: 700;
+          font-family: var(--font-mono);
+          font-size: 0.75rem;
+        }
+
+        .error-msg {
+          color: var(--danger);
+          font-weight: 500;
+        }
+
+        .validation-success-info {
+          padding: 0.875rem;
+          border-top: 1px solid var(--border-light);
+          background: rgba(16, 185, 129, 0.02);
+        }
+
+        .info-row {
           display: flex;
-          gap: 0.75rem;
-          flex-wrap: wrap;
+          align-items: center;
+          gap: 0.5rem;
+          font-size: 0.8125rem;
+          color: var(--success);
+          font-weight: 500;
         }
 
-        @media (max-width: 768px) {
-          .import-upload-item .button-group {
-            flex-direction: column;
-          }
-
-          .import-upload-item .button-group .btn {
-            width: 100%;
-          }
-
-          .import-upload-item .drop-zone {
-            padding: 2rem 1.5rem;
-            min-height: 140px;
-          }
-
-          .import-upload-item .drop-icon {
-            font-size: 2rem;
-          }
-        }
+        .mt-1 { margin-top: 0.5rem; }
       `}</style>
     </div>
   )

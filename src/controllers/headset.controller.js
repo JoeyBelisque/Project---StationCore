@@ -91,6 +91,36 @@ export const atualizarLacre = async (req, res, next) => {
   }
 };
 
+export const trocar = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { id_novo, status_novo_original, observacao } = req.body ?? {};
+
+    if (!id_novo) {
+      res.status(400).json({ error: "id_novo é obrigatório" });
+      return;
+    }
+    if (!status_novo_original) {
+      res.status(400).json({ error: "status_novo_original é obrigatório" });
+      return;
+    }
+
+    const result = await Headset.swapHeadset(
+      id,
+      id_novo,
+      status_novo_original,
+      observacao ?? ""
+    );
+    res.json(result);
+  } catch (e) {
+    if (e?.message?.includes("não encontrado")) {
+      res.status(404).json({ error: e.message });
+      return;
+    }
+    res.status(400).json({ error: e.message });
+  }
+};
+
 export const historico = async (req, res, next) => {
   try {
     const data = await Headset.getHeadsetHistorico(req.params.id);
