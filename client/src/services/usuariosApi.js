@@ -1,9 +1,9 @@
-import { getStoredToken } from '../lib/auth'
+import { getAuthToken } from '../lib/auth'
 
 const API_URL = 'http://localhost:3000/usuarios'
 
 async function request(path = '', options = {}) {
-  const token = getStoredToken()
+  const token = getAuthToken()
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
