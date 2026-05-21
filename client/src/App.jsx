@@ -3,6 +3,7 @@ import { Layout } from './components/Layout'
 import { Dashboard } from './pages/Dashboard'
 import { HeadsetsPage } from './pages/HeadsetsPage'
 import { ComputadoresPage } from './pages/ComputadoresPage'
+import { UsuariosPage } from './pages/UsuariosPage'
 import { ImportPage } from './pages/ImportPage'
 import { ExportarPage } from './pages/ExportarPage'
 import { LoginPage } from './pages/LoginPage'
@@ -38,6 +39,7 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="headsets" element={<HeadsetsPage />} />
             <Route path="computadores" element={<ComputadoresPage />} />
+            <Route path="usuarios" element={<UsuariosPage />} />
             <Route path="importar" element={<ImportPage />} />
             <Route path="exportar" element={<ExportarPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

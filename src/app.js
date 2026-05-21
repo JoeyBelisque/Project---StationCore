@@ -7,6 +7,7 @@ import cors from "cors";
 import computadorRoutes from "./routes/computador.routes.js";
 import headsetRoutes from "./routes/headset.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import usuarioRoutes from "./routes/usuario.routes.js";
 import importacaoRoutes from "./routes/importacao.routes.js";
 import { requireAuth } from "./middlewares/auth.middleware.js";
 
@@ -19,6 +20,7 @@ app.use(express.json());
 
 // Prefixos de URL: tudo em computador.routes.js fica sob /computadores, etc.
 app.use("/auth", authRoutes);
+app.use("/usuarios", usuarioRoutes);
 app.use("/computadores", requireAuth, computadorRoutes);
 app.use("/headsets", requireAuth, headsetRoutes);
 app.use("/importacao", requireAuth, importacaoRoutes);

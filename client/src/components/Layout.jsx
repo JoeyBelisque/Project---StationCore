@@ -4,6 +4,7 @@ import {
   LayoutDashboard, 
   Headphones, 
   Monitor, 
+  Users,
   ArrowDownToLine, 
   ArrowUpFromLine, 
   LogOut, 
@@ -26,6 +27,7 @@ function Sidebar({ isOpen, toggleMobileMenu }) {
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
     { to: '/headsets', label: 'Headsets', icon: Headphones },
     { to: '/computadores', label: 'Computadores', icon: Monitor },
+    { to: '/usuarios', label: 'Usuários', icon: Users },
     { to: '/importar', label: 'Importar', icon: ArrowDownToLine },
     { to: '/exportar', label: 'Exportar', icon: ArrowUpFromLine },
   ]
