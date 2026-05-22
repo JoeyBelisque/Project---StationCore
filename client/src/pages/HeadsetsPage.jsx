@@ -70,6 +70,7 @@ function categoryLabel(value) {
 function mapRow(r) {
   return {
     id: r.id,
+    nome: r.nome ?? '',
     matricula: r.matricula,
     lacre: r.lacre,
     marca: r.marca ?? '',
@@ -83,6 +84,7 @@ function mapRow(r) {
 
 const emptyForm = () => ({
   id: null,
+  nome: '',
   matricula: '',
   lacre: '',
   marca: '',
@@ -194,6 +196,7 @@ export function HeadsetsPage() {
     e.preventDefault()
     const f = modal.form
     const body = {
+      nome: f.nome.trim(),
       matricula: f.matricula.trim(),
       lacre: f.lacre.trim(),
       marca: f.marca.trim(),
@@ -409,6 +412,7 @@ export function HeadsetsPage() {
         <table>
           <thead>
             <tr>
+              <th>Nome / Identificador</th>
               <th>Matrícula</th>
               <th>Lacre</th>
               <th>Marca</th>
@@ -421,13 +425,14 @@ export function HeadsetsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="text-center py-8 muted">Carregando dados...</td></tr>
+              <tr><td colSpan={9} className="text-center py-8 muted">Carregando dados...</td></tr>
             ) : pageItems.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-8 muted">Nenhum registro encontrado.</td></tr>
+              <tr><td colSpan={9} className="text-center py-8 muted">Nenhum registro encontrado.</td></tr>
             ) : (
               pageItems.map((h) => (
                 <tr key={h.id}>
-                  <td><strong>{h.matricula || '—'}</strong></td>
+                  <td><strong>{h.nome || h.lacre}</strong></td>
+                  <td>{h.matricula || '—'}</td>
                   <td><code className="mono text-accent">{h.lacre}</code></td>
                   <td>{h.marca || '—'}</td>
                   <td className="mono small">{h.numeroSerie || '—'}</td>
@@ -467,6 +472,7 @@ export function HeadsetsPage() {
           footer={<><button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button><button type="submit" form="f-hs" className="btn btn-primary">Salvar Alterações</button></>}
         >
           <form id="f-hs" className="form-grid" onSubmit={handleSubmit}>
+            <label className="full">Nome / Identificador Personalizado<input className="input" value={modal.form.nome} onChange={e => setModal(m => ({...m, form: {...m.form, nome: e.target.value}}))} placeholder="Ex: Headset Reserva 01, Setor RH..." /></label>
             <label>Matrícula (Opcional)<input className="input" value={modal.form.matricula} onChange={e => setModal(m => ({...m, form: {...m.form, matricula: e.target.value}}))} /></label>
             <label>Lacre<input className="input mono" value={modal.form.lacre} onChange={e => setModal(m => ({...m, form: {...m.form, lacre: e.target.value}}))} required /></label>
             <label>Marca
