@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { listarAtividades } from '../services/atividadesApi'
 import { Pagination } from '../components/Pagination'
+import { Modal } from '../components/Modal'
 
 function ActivityIcon({ acao }) {
   const iconSize = 18
@@ -37,6 +38,7 @@ export function AuditoriaPage() {
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
   const [page, setPage] = useState(0)
+  const [selectedRow, setSelectedRow] = useState(null)
   const pageSize = 20
 
   const load = useCallback(async () => {
@@ -58,7 +60,12 @@ export function AuditoriaPage() {
     const s = q.trim().toLowerCase()
     return rows.filter((r) => {
       if (!r) return false
-      if (tipoFilter && r.tipo !== tipoFilter) return false
+      
+      // Filtro de Ativo (Tipo)
+      if (tipoFilter) {
+        const t = (r.tipo || r.tabela || '').toLowerCase()
+        if (!t.includes(tipoFilter)) return false
+      }
       
       // Filtro de Data Seguro
       if (dataInicio || dataFim) {
@@ -66,14 +73,20 @@ export function AuditoriaPage() {
         if (!timestamp) return false
         
         const dataEv = new Date(timestamp)
-        if (isNaN(dataEv.getTime())) return false // Pula datas inválidas
+        if (isNaN(dataEv.getTime())) return false
 
-        if (dataInicio && dataEv < new Date(dataInicio)) return false
-        if (dataFim && dataEv > new Date(dataFim + 'T23:59:59')) return false
+        if (dataInicio) {
+          const dStart = new Date(dataInicio + 'T00:00:00')
+          if (dataEv < dStart) return false
+        }
+        if (dataFim) {
+          const dEnd = new Date(dataFim + 'T23:59:59')
+          if (dataEv > dEnd) return false
+        }
       }
 
       if (!s) return true
-      const blob = `${r.usuario || ''} ${r.descricao || ''} ${r.acao || ''} ${r.tipo || ''}`.toLowerCase()
+      const blob = `${r.usuario || ''} ${r.descricao || ''} ${r.acao || ''} ${r.tipo || ''} ${r.lacre || ''}`.toLowerCase()
       return blob.includes(s)
     })
   }, [rows, q, tipoFilter, dataInicio, dataFim])
@@ -85,7 +98,7 @@ export function AuditoriaPage() {
   return (
     <div className="page-fade-in">
       <header className="page-header-premium">
-        <div className="row space-between">
+        <div className="row space-between wrap gap">
           <div>
             <h2 className="page-title">Módulo de Auditoria</h2>
             <p className="page-subtitle">Rastreabilidade completa de todas as movimentações e alterações do inventário.</p>
@@ -104,7 +117,7 @@ export function AuditoriaPage() {
             <Search className="icon" size={18} />
             <input 
               className="input" 
-              placeholder="Buscar por usuário, descrição ou ação..." 
+              placeholder="Buscar por usuário, descrição ou lacre..." 
               value={q} 
               onChange={e => { setQ(e.target.value); setPage(0); }} 
             />
@@ -172,7 +185,7 @@ export function AuditoriaPage() {
                   <td>
                     <div className="row gap">
                       <ActivityIcon acao={r.acao} />
-                      <span className="badge badge-info">{r.acao || 'Alteração'}</span>
+                      <span className="badge badge-info">{r.acao?.replace('_', ' ') || 'Alteração'}</span>
                     </div>
                   </td>
                   <td>
@@ -187,7 +200,11 @@ export function AuditoriaPage() {
                     <p className="small" style={{ maxWidth: '400px' }}>{r.descricao}</p>
                   </td>
                   <td style={{ textAlign: 'right' }}>
-                    <button className="btn btn-icon btn-secondary" title="Ver detalhes técnicos">
+                    <button 
+                      className="btn btn-icon btn-secondary" 
+                      title="Ver detalhes técnicos"
+                      onClick={() => setSelectedRow(r)}
+                    >
                       <MoreHorizontal size={16} />
                     </button>
                   </td>
@@ -205,11 +222,80 @@ export function AuditoriaPage() {
         onPageChange={setPage} 
       />
 
+      {/* Modal de Detalhes da Auditoria */}
+      {selectedRow && (
+        <Modal
+          title="Detalhes do Evento"
+          onClose={() => setSelectedRow(null)}
+          size="md"
+          footer={<button className="btn btn-secondary" onClick={() => setSelectedRow(null)}>Fechar</button>}
+        >
+          <div className="audit-details">
+            <div className="detail-group">
+              <span className="label">Timestamp</span>
+              <p className="value mono">{new Date(selectedRow.created_at).toLocaleString('pt-BR')}</p>
+            </div>
+            <div className="detail-group">
+              <span className="label">Ação Realizada</span>
+              <p className="value"><span className="badge badge-info">{selectedRow.acao}</span></p>
+            </div>
+            <div className="detail-group">
+              <span className="label">Usuário</span>
+              <p className="value"><strong>{selectedRow.usuario || 'Sistema'}</strong></p>
+            </div>
+            <div className="detail-group">
+              <span className="label">Descrição Completa</span>
+              <div className="card" style={{ background: 'var(--bg-secondary)', padding: '1rem', marginTop: '0.5rem' }}>
+                <p className="small" style={{ whiteSpace: 'pre-wrap' }}>{selectedRow.descricao}</p>
+              </div>
+            </div>
+            
+            {selectedRow.lacre && (
+              <div className="detail-group">
+                <span className="label">Lacre Relacionado</span>
+                <p className="value text-accent mono"><strong>{selectedRow.lacre}</strong></p>
+              </div>
+            )}
+            
+            {(selectedRow.valor_anterior || selectedRow.valor_novo) && (
+              <div className="inner-grid inner-grid-2" style={{ marginTop: '1.5rem' }}>
+                <div className="detail-group">
+                  <span className="label">Valor Anterior</span>
+                  <p className="value muted mono small">{selectedRow.valor_anterior || '—'}</p>
+                </div>
+                <div className="detail-group">
+                  <span className="label">Valor Novo</span>
+                  <p className="value text-success mono small">{selectedRow.valor_novo || '—'}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+
       <style>{`
         .mono { font-family: var(--font-mono); }
         .py-12 { padding: 3rem 0; }
         .space-between { justify-content: space-between; }
         .small-date { width: 150px; font-size: 0.8rem; padding: 0.5rem; }
+        
+        .audit-details {
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
+        }
+        .detail-group .label {
+          display: block;
+          font-size: 0.7rem;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--text-muted);
+          margin-bottom: 0.25rem;
+        }
+        .detail-group .value {
+          font-size: 0.9375rem;
+          margin: 0;
+        }
       `}</style>
     </div>
   )

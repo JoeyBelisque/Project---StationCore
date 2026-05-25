@@ -25,6 +25,13 @@ export async function removerHeadset(id) {
   })
 }
 
+export async function atualizarHeadsetsEmLote(ids, data) {
+  return fetchJson('/headsets/batch', {
+    method: 'POST',
+    body: JSON.stringify({ ids, data }),
+  })
+}
+
 export async function trocarLacreHeadset(id, body) {
   return fetchJson(`/headsets/${encodeURIComponent(id)}/lacre`, {
     method: 'PATCH',

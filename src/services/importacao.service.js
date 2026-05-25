@@ -223,6 +223,14 @@ function collectHeadsets(rows) {
     const status = lifecycle.status;
     const categoria = lifecycle.categoria;
     const observacoes = lifecycle.observacoes;
+    
+    let data_devolucao = null;
+    if (raw.data_devolucao) {
+      const d = new Date(raw.data_devolucao);
+      if (!isNaN(d.getTime())) {
+        data_devolucao = d;
+      }
+    }
 
     if (!lacre) errors.push(rowError("headsets", line, "lacre é obrigatório"));
     if (!STATUS_HEADSET.has(status)) {
@@ -244,7 +252,7 @@ function collectHeadsets(rows) {
       seenNumeroSerie.add(k);
     }
 
-    validRows.push({ matricula, lacre, marca, numero_serie, status, categoria, observacoes, line });
+    validRows.push({ matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, line });
   });
 
   return { validRows, errors };
@@ -427,11 +435,11 @@ async function persistHeadsets(headsets) {
         const categoriaFinal = deriveCategoria(row.status);
         const inserted = await client.query(
           `
-            INSERT INTO headsets (matricula, lacre, marca, numero_serie, status, categoria, observacoes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO headsets (matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
           `,
-          [row.matricula, row.lacre, row.marca, row.numero_serie || null, row.status, categoriaFinal, row.observacoes]
+          [row.matricula, row.lacre, row.marca, row.numero_serie || null, row.status, categoriaFinal, row.observacoes, row.data_devolucao]
         );
         await client.query(
           `INSERT INTO headset_historico (headset_id, acao, campo, valor_novo, observacao)
@@ -450,6 +458,7 @@ async function persistHeadsets(headsets) {
         const proximaMatricula = row.matricula || matriculaAtual;
         const proximoStatus = row.status || atual.status || "estoque";
         const proximaCategoria = deriveCategoria(proximoStatus);
+        const proximaDevolucao = row.data_devolucao || atual.data_devolucao || null;
         await client.query(
           `
             UPDATE headsets
@@ -459,6 +468,7 @@ async function persistHeadsets(headsets) {
                 status = $5,
                 categoria = $6,
                 observacoes = $7,
+                data_devolucao = $8,
                 updated_at = NOW()
             WHERE id = $1
           `,
@@ -470,10 +480,11 @@ async function persistHeadsets(headsets) {
             proximoStatus,
             proximaCategoria,
             row.observacoes || atual.observacoes || "",
+            proximaDevolucao,
           ]
         );
 
-        const campos = ["matricula", "marca", "numero_serie", "status", "categoria", "observacoes"];
+        const campos = ["matricula", "marca", "numero_serie", "status", "categoria", "observacoes", "data_devolucao"];
         for (const campo of campos) {
           const novoValor =
             campo === "matricula"

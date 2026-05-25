@@ -16,7 +16,8 @@ import {
   ChevronRight,
   User as UserIcon,
   Shield,
-  Key
+  Key,
+  History
 } from 'lucide-react'
 import { clearUserSession, getStoredUser, isAdmin, saveUserSession } from '../lib/auth'
 import stationcoreLogo from '../assets/stationcore_icone.png'
@@ -198,6 +199,7 @@ export function Layout() {
         <Modal
           title="Meu Perfil"
           onClose={() => !isSavingProfile && setIsProfileModalOpen(false)}
+          size="md"
           footer={
             <>
               <button className="btn btn-secondary" onClick={() => setIsProfileModalOpen(false)} disabled={isSavingProfile}>Cancelar</button>
@@ -208,13 +210,34 @@ export function Layout() {
           }
         >
           <form id="f-profile" className="form-grid" onSubmit={handleUpdateProfile}>
-            <div className="full" style={{ textAlign: 'center', marginBottom: '1rem' }}>
-              <div className="stat-icon" style={{ width: 64, height: 64, borderRadius: '50%', margin: '0 auto 1rem', background: 'var(--accent-glow)', border: '2px solid var(--accent)' }}>
-                <UserIcon size={32} className="text-accent" />
+            <div className="full" style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              textAlign: 'center', 
+              padding: '1rem',
+              background: 'rgba(var(--bg-rgb), 0.5)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--border-light)',
+              marginBottom: '1rem'
+            }}>
+              <div className="stat-icon" style={{ 
+                width: 80, 
+                height: 80, 
+                borderRadius: '50%', 
+                marginBottom: '1rem', 
+                background: 'var(--accent-glow)', 
+                border: '2px solid var(--accent)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <UserIcon size={40} className="text-accent" />
               </div>
-              <p className="small muted">{user?.email}</p>
-              <span className={`badge ${user?.role === 'admin' ? 'badge-danger' : 'badge-info'}`} style={{ marginTop: '0.5rem' }}>
-                <Shield size={12} style={{ marginRight: 4 }} />
+              <h3 style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>{user?.nome}</h3>
+              <p className="small muted" style={{ marginBottom: '0.75rem' }}>{user?.email}</p>
+              <span className={`badge ${user?.role === 'admin' ? 'badge-danger' : 'badge-info'}`}>
+                <Shield size={12} style={{ marginRight: 6 }} />
                 {user?.role === 'admin' ? 'Acesso Administrativo' : 'Acesso Operador'}
               </span>
             </div>
@@ -225,12 +248,13 @@ export function Layout() {
                 value={profileForm.nome} 
                 onChange={e => setProfileForm(p => ({...p, nome: e.target.value}))} 
                 required 
+                placeholder="Seu nome completo"
               />
             </label>
 
-            <div className="full" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-light)' }}>
-              <h5 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Key size={16} /> Alterar Senha
+            <div className="full" style={{ marginTop: '1rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-light)' }}>
+              <h5 style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.625rem', color: 'var(--text)' }}>
+                <Key size={18} className="text-accent" /> Alterar Senha de Acesso
               </h5>
               <div className="form-grid">
                 <label>Nova Senha
@@ -239,7 +263,8 @@ export function Layout() {
                     className="input" 
                     value={profileForm.senha} 
                     onChange={e => setProfileForm(p => ({...p, senha: e.target.value}))} 
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Deixe em branco p/ manter"
+                    minLength={6}
                   />
                 </label>
                 <label>Confirmar Nova Senha
@@ -248,11 +273,12 @@ export function Layout() {
                     className="input" 
                     value={profileForm.confirmarSenha} 
                     onChange={e => setProfileForm(p => ({...p, confirmarSenha: e.target.value}))} 
+                    placeholder="Repita a nova senha"
                   />
                 </label>
               </div>
-              <p className="small muted" style={{ marginTop: '0.75rem' }}>
-                Deixe os campos de senha em branco se não desejar alterá-la.
+              <p className="small muted" style={{ marginTop: '1rem', fontStyle: 'italic' }}>
+                * A senha deve conter pelo menos 6 caracteres.
               </p>
             </div>
           </form>

@@ -172,8 +172,42 @@ export function Dashboard() {
               to: '/headsets?status=manutencao'
             })
           }
+
+          // Alertas de Empréstimo
+          const hoje = new Date()
+          const emprestimos = rows.filter(r => r.status === 'emprestimo' && r.data_devolucao)
           
-          setAlerts(prev => [...prev, ...newAlerts])
+          const vencidos = emprestimos.filter(r => new Date(r.data_devolucao) < hoje)
+          if (vencidos.length > 0) {
+            const nomes = vencidos.slice(0, 2).map(v => v.nome || v.lacre).join(', ')
+            const suffix = vencidos.length > 2 ? ` (+${vencidos.length - 2})` : ''
+            newAlerts.push({
+              id: 'loan-overdue',
+              type: 'danger',
+              title: 'Empréstimos Vencidos',
+              msg: `${vencidos.length} pendentes: ${nomes}${suffix}.`,
+              to: '/headsets?status=emprestimo'
+            })
+          }
+
+          const proximos = emprestimos.filter(r => {
+            const data = new Date(r.data_devolucao)
+            const diff = data - hoje
+            return diff > 0 && diff < (48 * 60 * 60 * 1000) // Próximas 48h
+          })
+          if (proximos.length > 0) {
+            const nomes = proximos.slice(0, 2).map(p => p.nome || p.lacre).join(', ')
+            const suffix = proximos.length > 2 ? ` (+${proximos.length - 2})` : ''
+            newAlerts.push({
+              id: 'loan-upcoming',
+              type: 'warning',
+              title: 'Devoluções Próximas',
+              msg: `${proximos.length} vencendo: ${nomes}${suffix}.`,
+              to: '/headsets?status=emprestimo'
+            })
+          }
+          
+          setAlerts(newAlerts) // RESET state instead of appending to fix duplication
 
           // Cálculo de Desempenho por Marca
           const brands = ['intelbras', 'plantronics']
@@ -487,8 +521,14 @@ export function Dashboard() {
         /* Estilos de Alertas */
         .alerts-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-          gap: 1.25rem;
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          gap: 1rem;
+        }
+        @media (min-width: 768px) {
+          .alerts-grid {
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.25rem;
+          }
         }
         .alert-card {
           display: flex;
@@ -556,4 +596,3 @@ export function Dashboard() {
     </div>
   )
 }
-

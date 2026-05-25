@@ -13,7 +13,11 @@ import {
   FileText,
   Trash2,
   CheckCircle,
-  XCircle
+  XCircle,
+  Calendar,
+  CheckSquare,
+  Square,
+  Package
 } from 'lucide-react'
 import { HEADSET_STATUS, labelByValue } from '../constants/status'
 import { Modal } from '../components/Modal'
@@ -21,6 +25,7 @@ import { Pagination } from '../components/Pagination'
 import { useToast } from '../components/Toast'
 import {
   atualizarHeadset,
+  atualizarHeadsetsEmLote,
   criarHeadset,
   listarHistoricoHeadset,
   listarHeadsets,
@@ -78,6 +83,7 @@ function mapRow(r) {
     status: r.status,
     categoria: r.categoria ?? 'estoque',
     observacoes: r.observacoes ?? '',
+    dataDevolucao: r.data_devolucao,
     atualizadoEm: r.updated_at,
   }
 }
@@ -101,6 +107,7 @@ export function HeadsetsPage() {
   const { addToast } = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
   const [items, setItems] = useState([])
+  const [selectedIds, setSelectedIds] = useState(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [q, setQ] = useState('')
@@ -140,6 +147,7 @@ export function HeadsetsPage() {
     try {
       const data = await listarHeadsets()
       setItems(Array.isArray(data) ? data.map(mapRow) : [])
+      setSelectedIds(new Set())
     } catch (e) {
       setError(e.message || 'Falha ao carregar')
       setItems([])
@@ -189,11 +197,27 @@ export function HeadsetsPage() {
     setPage((p) => Math.min(p, maxPage))
   }, [visibleRows.length])
 
+  // Handlers de Seleção
+  const toggleSelect = (id) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedIds(next)
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === pageItems.length && pageItems.length > 0) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(pageItems.map(i => i.id)))
+    }
+  }
+
   // Handlers para Modais
   const openNew = () => setModal({ mode: 'edit', form: emptyForm() })
   const openEdit = (row) => setModal({ mode: 'edit', form: { ...emptyForm(), ...row } })
-  const openVincular = (row) => setModal({ mode: 'vincular', form: { id: row.id, lacre: row.lacre, matricula: row.matricula ?? '', observacoes: row.observacoes ?? '', isEmprestimo: false } })
-  const openEmprestimo = (row) => setModal({ mode: 'vincular', form: { id: row.id, lacre: row.lacre, matricula: row.matricula ?? '', observacoes: row.observacoes ?? '', isEmprestimo: true } })
+  const openVincular = (row) => setModal({ mode: 'vincular', form: { id: row.id, lacre: row.lacre, matricula: row.matricula ?? '', observacoes: row.observacoes ?? '', dataDevolucao: '', isEmprestimo: false } })
+  const openEmprestimo = (row) => setModal({ mode: 'vincular', form: { id: row.id, lacre: row.lacre, matricula: row.matricula ?? '', observacoes: row.observacoes ?? '', dataDevolucao: '', isEmprestimo: true } })
   const openTrocaLacre = (row) => setModal({ mode: 'trocaLacre', form: { id: row.id, lacreAtual: row.lacre, novoLacre: '', observacao: '' } })
   const openTroca = (row) => setModal({ mode: 'troca', headset: row, form: { id_novo: '', status_novo_original: 'defeito', observacao: '' } })
   const openRetornoManutencao = (row) => setModal({ mode: 'retornoManutencao', form: { id: row.id, lacre: row.lacre, custo: '', pecas: '', observacao: '' } })
@@ -240,6 +264,26 @@ export function HeadsetsPage() {
     } catch (err) { addToast(err.message || 'Erro ao salvar', 'error') }
   }
 
+  // Ação em Lote: Mover para Estoque
+  async function handleBatchToStock() {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Deseja mover ${selectedIds.size} equipamentos selecionados para o estoque?`)) return
+    
+    try {
+      setLoading(true)
+      await atualizarHeadsetsEmLote(Array.from(selectedIds), { 
+        status: 'estoque',
+        observacoes: `Retorno em lote ao estoque em ${new Date().toLocaleString('pt-BR')}`
+      })
+      addToast(`${selectedIds.size} equipamentos movidos para estoque!`)
+      await load()
+    } catch (err) {
+      addToast(err.message || 'Erro ao processar lote', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Troca de Lacre
   async function handleTrocaLacre(e) {
     e.preventDefault()
@@ -267,7 +311,8 @@ export function HeadsetsPage() {
         numero_serie: row.numeroSerie, // FIX: backend expects numero_serie
         status: f.isEmprestimo ? 'emprestimo' : 'em_uso',
         categoria: f.isEmprestimo ? 'emprestimo' : 'operacao',
-        observacoes: f.observacoes.trim()
+        observacoes: f.observacoes.trim(),
+        data_devolucao: f.isEmprestimo && f.dataDevolucao ? f.dataDevolucao : null
       })
       setModal(null)
       addToast(f.isEmprestimo ? 'Empréstimo registrado!' : 'Vínculo realizado!')
@@ -314,6 +359,7 @@ export function HeadsetsPage() {
         marca: row.marca,
         numero_serie: row.numeroSerie,
         status: 'estoque',
+        data_devolucao: null,
         observacoes: `Baixa de ${isEmprestimo ? 'empréstimo' : 'operador'} realizada em ${new Date().toLocaleString('pt-BR')}`
       })
       setModal(null)
@@ -451,11 +497,39 @@ export function HeadsetsPage() {
         </select>
       </div>
 
+      {/* Barra de Ações em Lote */}
+      {selectedIds.size > 0 && (
+        <div className="batch-actions-bar card" style={{ marginBottom: '1.5rem', background: 'var(--accent-glow)', borderColor: 'var(--accent)', padding: '1rem' }}>
+          <div className="row space-between wrap gap">
+            <div className="row gap">
+              <CheckSquare size={20} className="text-accent" />
+              <strong>{selectedIds.size} selecionado(s)</strong>
+            </div>
+            <div className="row gap wrap">
+              <button className="btn btn-secondary btn-small" onClick={() => setSelectedIds(new Set())}>Desmarcar</button>
+              <button className="btn btn-primary btn-small" onClick={handleBatchToStock}>
+                <Package size={14} /> Mover p/ Estoque
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabela de Dados */}
       <div className="table-container shadow-lg">
         <table>
           <thead>
             <tr>
+              <th style={{ width: 40, paddingRight: 0 }}>
+                <button 
+                  className="btn-icon-minimal" 
+                  onClick={toggleSelectAll} 
+                  title="Selecionar tudo"
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}
+                >
+                  {selectedIds.size === pageItems.length && pageItems.length > 0 ? <CheckSquare size={18} className="text-accent" /> : <Square size={18} />}
+                </button>
+              </th>
               <th>Nome / Identificador</th>
               {!isCompact && <th>Matrícula</th>}
               <th>Lacre</th>
@@ -469,12 +543,21 @@ export function HeadsetsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={isCompact ? 4 : 9} className="text-center py-8 muted">Carregando dados...</td></tr>
+              <tr><td colSpan={isCompact ? 5 : 10} className="text-center py-8 muted">Carregando dados...</td></tr>
             ) : pageItems.length === 0 ? (
-              <tr><td colSpan={isCompact ? 4 : 9} className="text-center py-8 muted">Nenhum registro encontrado.</td></tr>
+              <tr><td colSpan={isCompact ? 5 : 10} className="text-center py-8 muted">Nenhum registro encontrado.</td></tr>
             ) : (
               pageItems.map((h) => (
-                <tr key={h.id}>
+                <tr key={h.id} className={selectedIds.has(h.id) ? 'selected-row' : ''} style={selectedIds.has(h.id) ? { background: 'var(--accent-glow)' } : {}}>
+                  <td style={{ paddingRight: 0 }}>
+                    <button 
+                      className="btn-icon-minimal" 
+                      onClick={() => toggleSelect(h.id)}
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}
+                    >
+                      {selectedIds.has(h.id) ? <CheckSquare size={18} className="text-accent" /> : <Square size={18} />}
+                    </button>
+                  </td>
                   <td>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <strong>{h.nome || h.lacre}</strong>
@@ -486,9 +569,16 @@ export function HeadsetsPage() {
                   {!isCompact && <td>{h.marca || '—'}</td>}
                   {!isCompact && <td className="mono small">{h.numeroSerie || '—'}</td>}
                   <td>
-                    <span className={getBadgeClass(h.status)}>
-                      {labelByValue(HEADSET_STATUS, h.status)}
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span className={getBadgeClass(h.status)}>
+                        {labelByValue(HEADSET_STATUS, h.status)}
+                      </span>
+                      {h.status === 'emprestimo' && h.dataDevolucao && (
+                        <span className="small text-warning" style={{ marginTop: 4, fontSize: '0.7rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Calendar size={10} /> {new Date(h.dataDevolucao).toLocaleDateString('pt-BR')}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   {!isCompact && <td><span className="muted small">{categoryLabel(h.categoria)}</span></td>}
                   {!isCompact && (
@@ -612,6 +702,17 @@ export function HeadsetsPage() {
         >
           <form id="f-vinc" className="form-grid" onSubmit={handleVincular}>
             <label className="full">Matrícula do {modal.form.isEmprestimo ? 'Colaborador' : 'Operador'}<input className="input" value={modal.form.matricula} onChange={e => setModal(m => ({...m, form: {...m.form, matricula: e.target.value}}))} required autoFocus /></label>
+            {modal.form.isEmprestimo && (
+              <label className="full">Data Prevista de Devolução
+                <input 
+                  type="date" 
+                  className="input" 
+                  value={modal.form.dataDevolucao} 
+                  onChange={e => setModal(m => ({...m, form: {...m.form, dataDevolucao: e.target.value}}))} 
+                  required={modal.form.isEmprestimo}
+                />
+              </label>
+            )}
             <label className="full">Observações de {modal.form.isEmprestimo ? 'Empréstimo' : 'Entrega'}<textarea className="input" rows={3} value={modal.form.observacoes} onChange={e => setModal(m => ({...m, form: {...m.form, observacoes: e.target.value}}))} /></label>
           </form>
         </Modal>
@@ -728,4 +829,3 @@ export function HeadsetsPage() {
     </div>
   )
 }
-

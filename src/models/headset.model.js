@@ -10,7 +10,9 @@ async function ensureSchema() {
   if (schemaEnsured) return;
   await pool.query(`
     ALTER TABLE headsets
-      ADD COLUMN IF NOT EXISTS categoria TEXT NOT NULL DEFAULT 'estoque';
+      ADD COLUMN IF NOT EXISTS categoria TEXT NOT NULL DEFAULT 'estoque',
+      ADD COLUMN IF NOT EXISTS nome TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS data_devolucao TIMESTAMPTZ;
   `);
   await pool.query(`
     ALTER TABLE headsets
@@ -63,6 +65,7 @@ function deriveCategoria(status) {
 function normalizePayload(data) {
   const status = String(data?.status ?? "estoque").trim() || "estoque";
   return {
+    nome: String(data?.nome ?? "").trim(),
     matricula: String(data?.matricula ?? "").trim(),
     lacre: String(data?.lacre ?? "").trim(),
     marca: normalizeMarca(data?.marca),
@@ -70,6 +73,7 @@ function normalizePayload(data) {
     status,
     categoria: deriveCategoria(status),
     observacoes: String(data?.observacoes ?? "").trim(),
+    data_devolucao: data?.data_devolucao ? new Date(data.data_devolucao) : null,
   };
 }
 
@@ -92,7 +96,7 @@ async function addHistoryEntry(client, headsetId, acao, campo, valorAnterior, va
 export async function getHeadsets() {
   await ensureSchema();
   const result = await pool.query(
-    `SELECT id, matricula, lacre, marca, numero_serie, status, categoria, observacoes, created_at, updated_at
+    `SELECT id, nome, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, created_at, updated_at
      FROM headsets
      ORDER BY updated_at DESC`
   );
@@ -106,10 +110,11 @@ export async function createHeadset(data) {
   try {
     await client.query("BEGIN");
     const result = await client.query(
-      `INSERT INTO headsets (matricula, lacre, marca, numero_serie, status, categoria, observacoes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, matricula, lacre, marca, numero_serie, status, categoria, observacoes, created_at, updated_at`,
+      `INSERT INTO headsets (nome, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id, nome, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, created_at, updated_at`,
       [
+        payload.nome,
         payload.matricula,
         payload.lacre,
         payload.marca,
@@ -117,6 +122,7 @@ export async function createHeadset(data) {
         payload.status,
         payload.categoria,
         payload.observacoes,
+        payload.data_devolucao,
       ]
     );
     const row = result.rows[0];
@@ -146,18 +152,21 @@ export async function updateHeadset(id, data) {
 
     const result = await client.query(
       `UPDATE headsets SET
-         matricula = $2,
-         lacre = $3,
-         marca = $4,
-         numero_serie = $5,
-         status = $6,
-         categoria = $7,
-         observacoes = $8,
+         nome = $2,
+         matricula = $3,
+         lacre = $4,
+         marca = $5,
+         numero_serie = $6,
+         status = $7,
+         categoria = $8,
+         observacoes = $9,
+         data_devolucao = $10,
          updated_at = NOW()
        WHERE id = $1
-       RETURNING id, matricula, lacre, marca, numero_serie, status, categoria, observacoes, created_at, updated_at`,
+       RETURNING id, nome, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, created_at, updated_at`,
       [
         id,
+        payload.nome,
         payload.matricula,
         payload.lacre,
         payload.marca,
@@ -165,11 +174,12 @@ export async function updateHeadset(id, data) {
         payload.status,
         payload.categoria,
         payload.observacoes,
+        payload.data_devolucao,
       ]
     );
     const updated = result.rows[0];
 
-    const tracked = ["matricula", "lacre", "marca", "numero_serie", "status", "categoria", "observacoes"];
+    const tracked = ["nome", "matricula", "lacre", "marca", "numero_serie", "status", "categoria", "observacoes", "data_devolucao"];
     for (const field of tracked) {
       if ((current[field] ?? null) !== (updated[field] ?? null)) {
         await addHistoryEntry(
@@ -212,7 +222,7 @@ export async function trocarLacre(id, novoLacre, observacao = "") {
       `UPDATE headsets
        SET lacre = $2, updated_at = NOW()
        WHERE id = $1
-       RETURNING id, matricula, lacre, marca, numero_serie, status, categoria, observacoes, created_at, updated_at`,
+       RETURNING id, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, created_at, updated_at`,
       [id, lacre]
     );
     await addHistoryEntry(client, id, "troca_lacre", "lacre", current.lacre, lacre, observacao);
@@ -289,9 +299,71 @@ export async function getHeadsetHistorico(id) {
   return result.rows;
 }
 
+export async function getGlobalHistorico(limit = 10) {
+  await ensureSchema();
+  const result = await pool.query(
+    `SELECT h.id, h.headset_id, h.acao, h.campo, h.valor_anterior, h.valor_novo, h.observacao, h.created_at, hs.lacre
+     FROM headset_historico h
+     JOIN headsets hs ON h.headset_id = hs.id
+     ORDER BY h.created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+  return result.rows;
+}
+
 /** Apaga uma linha; rowCount diz se algo foi removido. */
 export async function deleteHeadset(id) {
   await ensureSchema();
   const result = await pool.query(`DELETE FROM headsets WHERE id = $1`, [id]);
   return result.rowCount > 0;
+}
+
+export async function updateBatch(ids, data) {
+  await ensureSchema();
+  if (!Array.isArray(ids) || ids.length === 0) return { success: false, updated: 0 };
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    let count = 0;
+    
+    // Normaliza apenas os campos permitidos para batch
+    const status = data.status ? String(data.status).trim() : null;
+    const categoria = status ? deriveCategoria(status) : null;
+    const observacoesAdd = data.observacoes ? String(data.observacoes).trim() : "";
+
+    for (const id of ids) {
+      // Busca atual para log de histórico
+      const currentRes = await client.query(`SELECT status, categoria, observacoes FROM headsets WHERE id = $1`, [id]);
+      if (currentRes.rowCount === 0) continue;
+      const current = currentRes.rows[0];
+
+      const nextStatus = status || current.status;
+      const nextCategoria = categoria || current.categoria;
+      const nextObs = observacoesAdd 
+        ? (current.observacoes ? `${current.observacoes}\n${observacoesAdd}` : observacoesAdd)
+        : current.observacoes;
+
+      await client.query(
+        `UPDATE headsets SET status = $1, categoria = $2, observacoes = $3, updated_at = NOW() WHERE id = $4`,
+        [nextStatus, nextCategoria, nextObs, id]
+      );
+
+      // Loga mudança de status se houver
+      if (status && status !== current.status) {
+        await addHistoryEntry(client, id, "atualizacao_lote", "status", current.status, status, "Atualização em lote");
+      }
+      
+      count++;
+    }
+
+    await client.query("COMMIT");
+    return { success: true, updated: count };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
