@@ -2,6 +2,7 @@
   /* Paleta Premium - Dark Mode */
   --bg: #030712;
   --bg-rgb: 3, 7, 18;
+  --bg-secondary: #0f172a;
   --sidebar-bg: #090e1a;
   --surface: #0f172a;
   --surface-rgb: 15, 23, 42;
@@ -37,6 +38,7 @@
 [data-theme="light"] {
   --bg: #f8fafc;
   --bg-rgb: 248, 250, 252;
+  --bg-secondary: #f1f5f9;
   --sidebar-bg: #ffffff;
   --surface: #ffffff;
   --surface-rgb: 255, 255, 255;
@@ -820,7 +822,7 @@ table {
 }
 
 th {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--border-light);
   padding: 1rem 1.25rem;
   text-align: left;
   font-size: 0.7rem;
@@ -1091,6 +1093,8 @@ tr:hover td {
 .muted { color: var(--text-muted); }
 .text-accent { color: var(--accent-light); }
 .text-danger { color: var(--danger); }
+.text-success { color: var(--success); }
+.text-warning { color: var(--warning); }
 .w-full { width: 100%; }
 
 /* Distribution Bars Dashboard */

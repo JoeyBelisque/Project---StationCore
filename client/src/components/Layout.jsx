@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { 
   LayoutDashboard, 
@@ -13,10 +13,16 @@ import {
   Menu,
   X,
   Home,
-  ChevronRight
+  ChevronRight,
+  User as UserIcon,
+  Shield,
+  Key
 } from 'lucide-react'
-import { clearUserSession, getStoredUser } from '../lib/auth'
+import { clearUserSession, getStoredUser, isAdmin, saveUserSession } from '../lib/auth'
 import stationcoreLogo from '../assets/stationcore_icone.png'
+import { Modal } from './Modal'
+import { useToast } from './Toast'
+import { atualizarUsuario } from '../services/usuariosApi'
 
 /**
  * Componente de Navegação Principal (Sidebar)
@@ -27,7 +33,8 @@ function Sidebar({ isOpen, toggleMobileMenu }) {
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
     { to: '/headsets', label: 'Headsets', icon: Headphones },
     { to: '/computadores', label: 'Computadores', icon: Monitor },
-    { to: '/usuarios', label: 'Usuários', icon: Users },
+    { to: '/usuarios', label: 'Usuários', icon: Users, adminOnly: true },
+    { to: '/auditoria', label: 'Auditoria', icon: History },
     { to: '/importar', label: 'Importar', icon: ArrowDownToLine },
     { to: '/exportar', label: 'Exportar', icon: ArrowUpFromLine },
   ]
@@ -46,22 +53,25 @@ function Sidebar({ isOpen, toggleMobileMenu }) {
       </div>
 
       <nav className="sidebar-nav">
-        {navItems.map((item) => (
-          <NavLink 
-            key={item.to} 
-            to={item.to} 
-            end={item.end}
-            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            onClick={() => isOpen && toggleMobileMenu()} // Fecha o menu ao clicar em links no mobile
-          >
-            <item.icon size={18} />
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
+        {navItems.map((item) => {
+          if (item.adminOnly && !isAdmin()) return null
+          return (
+            <NavLink 
+              key={item.to} 
+              to={item.to} 
+              end={item.end}
+              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+              onClick={() => isOpen && toggleMobileMenu()}
+            >
+              <item.icon size={18} />
+              <span>{item.label}</span>
+            </NavLink>
+          )
+        })}
       </nav>
 
       <div className="sidebar-footer">
-        <p className="small muted">v1.2.0 Premium</p>
+        <p className="small muted">v1.2.5 Premium</p>
       </div>
     </aside>
   )
@@ -73,9 +83,13 @@ function Sidebar({ isOpen, toggleMobileMenu }) {
  */
 export function Layout() {
   const navigate = useNavigate()
-  const user = getStoredUser()
+  const { addToast } = useToast()
+  const [user, setUser] = useState(getStoredUser())
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
+  const [profileForm, setProfileForm] = useState({ nome: '', senha: '', confirmarSenha: '' })
+  const [isSavingProfile, setIsSavingProfile] = useState(false)
 
   // Sincroniza o tema selecionado com o atributo data-theme no HTML
   useEffect(() => {
@@ -84,13 +98,45 @@ export function Layout() {
   }, [theme])
 
   function handleLogout() {
-    // Finaliza a sessão do usuário e redireciona para o login
     clearUserSession()
     navigate('/login', { replace: true })
   }
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark')
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen)
+
+  const openProfile = () => {
+    setProfileForm({ nome: user?.nome || '', senha: '', confirmarSenha: '' })
+    setIsProfileModalOpen(true)
+  }
+
+  async function handleUpdateProfile(e) {
+    e.preventDefault()
+    if (profileForm.senha && profileForm.senha !== profileForm.confirmarSenha) {
+      return addToast('As senhas não coincidem.', 'warning')
+    }
+
+    setIsSavingProfile(true)
+    try {
+      const body = { nome: profileForm.nome }
+      if (profileForm.senha) body.senha = profileForm.senha
+      
+      const updatedUser = await atualizarUsuario(user.id, body)
+      
+      // Atualiza estado local e storage
+      const session = JSON.parse(localStorage.getItem('stationcore.auth.session'))
+      session.usuario = updatedUser
+      saveUserSession(session)
+      
+      setUser(updatedUser)
+      setIsProfileModalOpen(false)
+      addToast('Perfil atualizado com sucesso!')
+    } catch (err) {
+      addToast(err.message || 'Erro ao atualizar perfil', 'error')
+    } finally {
+      setIsSavingProfile(false)
+    }
+  }
 
   return (
     <div className="app-shell">
@@ -116,7 +162,20 @@ export function Layout() {
             </button>
 
             <div className="user-profile">
-              <span className="user-name">Olá, <strong>{user?.nome ?? user?.email ?? 'Usuário'}</strong></span>
+              <div 
+                className="user-info-clickable" 
+                onClick={openProfile}
+                title="Ver meu perfil"
+              >
+                <div className="stat-icon" style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+                  <UserIcon size={16} />
+                </div>
+                <div className="user-text">
+                  <span className="user-name">Olá, <strong>{user?.nome?.split(' ')[0] ?? 'Usuário'}</strong></span>
+                  <span className="user-role small muted">{user?.role === 'admin' ? 'Administrador' : 'Operador'}</span>
+                </div>
+              </div>
+              
               <button 
                 type="button" 
                 className="btn btn-secondary btn-icon logout" 
@@ -133,6 +192,98 @@ export function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Modal: Meu Perfil */}
+      {isProfileModalOpen && (
+        <Modal
+          title="Meu Perfil"
+          onClose={() => !isSavingProfile && setIsProfileModalOpen(false)}
+          footer={
+            <>
+              <button className="btn btn-secondary" onClick={() => setIsProfileModalOpen(false)} disabled={isSavingProfile}>Cancelar</button>
+              <button type="submit" form="f-profile" className="btn btn-primary" disabled={isSavingProfile}>
+                {isSavingProfile ? 'Salvando...' : 'Salvar Alterações'}
+              </button>
+            </>
+          }
+        >
+          <form id="f-profile" className="form-grid" onSubmit={handleUpdateProfile}>
+            <div className="full" style={{ textAlign: 'center', marginBottom: '1rem' }}>
+              <div className="stat-icon" style={{ width: 64, height: 64, borderRadius: '50%', margin: '0 auto 1rem', background: 'var(--accent-glow)', border: '2px solid var(--accent)' }}>
+                <UserIcon size={32} className="text-accent" />
+              </div>
+              <p className="small muted">{user?.email}</p>
+              <span className={`badge ${user?.role === 'admin' ? 'badge-danger' : 'badge-info'}`} style={{ marginTop: '0.5rem' }}>
+                <Shield size={12} style={{ marginRight: 4 }} />
+                {user?.role === 'admin' ? 'Acesso Administrativo' : 'Acesso Operador'}
+              </span>
+            </div>
+
+            <label className="full">Nome Completo
+              <input 
+                className="input" 
+                value={profileForm.nome} 
+                onChange={e => setProfileForm(p => ({...p, nome: e.target.value}))} 
+                required 
+              />
+            </label>
+
+            <div className="full" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-light)' }}>
+              <h5 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Key size={16} /> Alterar Senha
+              </h5>
+              <div className="form-grid">
+                <label>Nova Senha
+                  <input 
+                    type="password" 
+                    className="input" 
+                    value={profileForm.senha} 
+                    onChange={e => setProfileForm(p => ({...p, senha: e.target.value}))} 
+                    placeholder="Mínimo 6 caracteres"
+                  />
+                </label>
+                <label>Confirmar Nova Senha
+                  <input 
+                    type="password" 
+                    className="input" 
+                    value={profileForm.confirmarSenha} 
+                    onChange={e => setProfileForm(p => ({...p, confirmarSenha: e.target.value}))} 
+                  />
+                </label>
+              </div>
+              <p className="small muted" style={{ marginTop: '0.75rem' }}>
+                Deixe os campos de senha em branco se não desejar alterá-la.
+              </p>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      <style>{`
+        .user-info-clickable {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.5rem 0.75rem;
+          border-radius: var(--radius-md);
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+        .user-info-clickable:hover {
+          background: var(--bg-secondary);
+        }
+        .user-text {
+          display: flex;
+          flex-direction: column;
+          line-height: 1.2;
+        }
+        .user-role {
+          font-size: 0.7rem;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          font-weight: 700;
+        }
+      `}</style>
     </div>
   )
 }

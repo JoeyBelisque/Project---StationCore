@@ -6,6 +6,7 @@ import { ComputadoresPage } from './pages/ComputadoresPage'
 import { UsuariosPage } from './pages/UsuariosPage'
 import { ImportPage } from './pages/ImportPage'
 import { ExportarPage } from './pages/ExportarPage'
+import { AuditoriaPage } from './pages/AuditoriaPage'
 import { LoginPage } from './pages/LoginPage'
 import { getStoredUser } from './lib/auth'
 import { ToastProvider } from './components/Toast'
@@ -40,6 +41,7 @@ export default function App() {
             <Route path="headsets" element={<HeadsetsPage />} />
             <Route path="computadores" element={<ComputadoresPage />} />
             <Route path="usuarios" element={<UsuariosPage />} />
+            <Route path="auditoria" element={<AuditoriaPage />} />
             <Route path="importar" element={<ImportPage />} />
             <Route path="exportar" element={<ExportarPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

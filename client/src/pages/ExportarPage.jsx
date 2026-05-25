@@ -7,7 +7,9 @@ import {
   Headphones, 
   Monitor, 
   Info,
-  Loader2
+  Loader2,
+  Calendar,
+  Settings2
 } from 'lucide-react'
 import { listarHeadsets } from '../services/headsetsApi'
 import { listarComputadores } from '../services/computadoresApi'
@@ -27,6 +29,27 @@ const STATUS_PC = [
   { value: 'manutencao', label: 'Em manutenção' },
   { value: 'inutilizavel', label: 'Inutilizáveis' },
   { value: 'estoque', label: 'Estoque' },
+]
+
+const COLUNAS_HEADSET = [
+  { id: 'nome', label: 'Nome/Identificador' },
+  { id: 'matricula', label: 'Matrícula' },
+  { id: 'lacre', label: 'Lacre' },
+  { id: 'marca', label: 'Marca' },
+  { id: 'numero_serie', label: 'Nº Série' },
+  { id: 'status', label: 'Status' },
+  { id: 'categoria', label: 'Categoria' },
+  { id: 'observacoes', label: 'Observações' },
+  { id: 'updated_at', label: 'Última Atualização' },
+]
+
+const COLUNAS_PC = [
+  { id: 'nome', label: 'Identificador' },
+  { id: 'pa', label: 'PA' },
+  { id: 'hostname', label: 'Hostname' },
+  { id: 'serial_number', label: 'Nº Série' },
+  { id: 'status', label: 'Status' },
+  { id: 'updated_at', label: 'Última Atualização' },
 ]
 
 /**
@@ -56,60 +79,112 @@ function baixarCSV(dados, nomeArquivo) {
 
 /**
  * Página de Exportação de Dados
- * Permite extrair relatórios customizados em formato XLSX ou CSV.
+ * Permite extrair relatórios customizados em formato XLSX ou CSV com filtros avançados.
  */
 export function ExportarPage() {
   const [hsStatus, setHsStatus] = useState('')
   const [pcStatus, setPcStatus] = useState('')
+  const [dataInicio, setDataInicio] = useState('')
+  const [dataFim, setDataFim] = useState('')
+  const [colsHs, setColsHs] = useState(COLUNAS_HEADSET.map(c => c.id))
+  const [colsPc, setColsPc] = useState(COLUNAS_PC.map(c => c.id))
+  
   const [loading, setLoading] = useState(null)
   const [feedback, setFeedback] = useState(null)
 
   const hoje = () => new Date().toISOString().slice(0, 10)
+
+  // Filtra dados por data
+  const filtrarPorData = (rows) => {
+    if (!dataInicio && !dataFim) return rows
+    return rows.filter(r => {
+      const data = new Date(r.updated_at || r.created_at)
+      if (dataInicio && data < new Date(dataInicio)) return false
+      if (dataFim && data > new Date(dataFim + 'T23:59:59')) return false
+      return true
+    })
+  }
+
+  // Mapeia colunas selecionadas
+  const mapearColunas = (rows, colunasAtivas, dicionario) => {
+    return rows.map(r => {
+      const obj = {}
+      colunasAtivas.forEach(id => {
+        const label = dicionario.find(c => c.id === id)?.label || id
+        let valor = r[id]
+        if (id === 'updated_at' || id === 'created_at') {
+          valor = valor ? new Date(valor).toLocaleString('pt-BR') : '—'
+        }
+        obj[label] = valor ?? '—'
+      })
+      return obj
+    })
+  }
+
+  const toggleCol = (type, id) => {
+    if (type === 'hs') {
+      setColsHs(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])
+    } else {
+      setColsPc(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])
+    }
+  }
 
   // Função mestre para exportação
   async function exportar(tipo, formato) {
     setLoading(`${tipo}-${formato}`)
     setFeedback(null)
     try {
-      let dados = []
+      let dadosRaw = []
+      let dadosFinal = []
       let nomeArquivo = ''
       let nomeAba = ''
 
       if (tipo === 'headsets') {
         const rows = await listarHeadsets()
-        dados = hsStatus ? rows.filter((r) => r.status === hsStatus) : rows
+        dadosRaw = hsStatus ? rows.filter((r) => r.status === hsStatus) : rows
+        dadosRaw = filtrarPorData(dadosRaw)
+        dadosFinal = mapearColunas(dadosRaw, colsHs, COLUNAS_HEADSET)
         nomeArquivo = `headsets${hsStatus ? '_' + hsStatus : ''}_${hoje()}`
         nomeAba = 'Headsets'
       } else if (tipo === 'computadores') {
         const rows = await listarComputadores()
-        dados = pcStatus ? rows.filter((r) => r.status === pcStatus) : rows
+        dadosRaw = pcStatus ? rows.filter((r) => r.status === pcStatus) : rows
+        dadosRaw = filtrarPorData(dadosRaw)
+        dadosFinal = mapearColunas(dadosRaw, colsPc, COLUNAS_PC)
         nomeArquivo = `computadores${pcStatus ? '_' + pcStatus : ''}_${hoje()}`
         nomeAba = 'Computadores'
       } else {
         const [hs, pcs] = await Promise.all([listarHeadsets(), listarComputadores()])
         if (formato === 'xlsx') {
           const wb = XLSX.utils.book_new()
-          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hs), 'Headsets')
-          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pcs), 'Computadores')
+          const hsFinal = mapearColunas(filtrarPorData(hs), colsHs, COLUNAS_HEADSET)
+          const pcFinal = mapearColunas(filtrarPorData(pcs), colsPc, COLUNAS_PC)
+          
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hsFinal), 'Headsets')
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pcFinal), 'Computadores')
           XLSX.writeFile(wb, `stationcore_completo_${hoje()}.xlsx`)
-          setFeedback({ tipo: 'success', msg: `${hs.length + pcs.length} registros exportados.` })
+          setFeedback({ tipo: 'success', msg: `${hsFinal.length + pcFinal.length} registros exportados.` })
           return
         }
-        dados = [...hs.map(r => ({ ...r, _tipo: 'headset' })), ...pcs.map(r => ({ ...r, _tipo: 'computador' }))]
+        // CSV completo junta tudo com prefixo
+        const hsFinal = mapearColunas(filtrarPorData(hs), colsHs, COLUNAS_HEADSET).map(r => ({ ...r, TIPO: 'HEADSET' }))
+        const pcFinal = mapearColunas(filtrarPorData(pcs), colsPc, COLUNAS_PC).map(r => ({ ...r, TIPO: 'COMPUTADOR' }))
+        dadosFinal = [...hsFinal, ...pcFinal]
         nomeArquivo = `stationcore_completo_${hoje()}`
         nomeAba = 'Geral'
       }
 
-      if (dados.length === 0) {
+      if (dadosFinal.length === 0) {
         return setFeedback({ tipo: 'warning', msg: 'Nenhum dado encontrado com os filtros selecionados.' })
       }
 
-      if (formato === 'xlsx') baixarXLSX(dados, nomeAba, nomeArquivo)
-      else baixarCSV(dados, nomeArquivo)
+      if (formato === 'xlsx') baixarXLSX(dadosFinal, nomeAba, nomeArquivo)
+      else baixarCSV(dadosFinal, nomeArquivo)
 
-      setFeedback({ tipo: 'success', msg: `${dados.length} registros exportados com sucesso.` })
-    } catch {
-      setFeedback({ tipo: 'error', msg: 'Falha ao buscar dados na API.' })
+      setFeedback({ tipo: 'success', msg: `${dadosFinal.length} registros exportados com sucesso.` })
+    } catch (err) {
+      console.error(err)
+      setFeedback({ tipo: 'error', msg: 'Falha ao processar exportação.' })
     } finally {
       setLoading(null)
     }
@@ -119,28 +194,62 @@ export function ExportarPage() {
     <div className="page-fade-in">
       <header className="page-header-premium">
         <h2 className="page-title">Exportar</h2>
-        <p className="page-subtitle">Gere relatórios customizados e backups em Excel ou CSV.</p>
+        <p className="page-subtitle">Relatórios avançados com filtros de data e seleção de colunas.</p>
       </header>
 
-      {/* Alertas de Feedback */}
       {feedback && (
         <div className={`badge ${feedback.tipo === 'success' ? 'badge-success' : feedback.tipo === 'warning' ? 'badge-warning' : 'badge-danger'} w-full`} style={{ marginBottom: '1.5rem', padding: '1rem' }}>
           {feedback.msg}
         </div>
       )}
 
+      {/* Filtros Globais */}
+      <section className="card" style={{ marginBottom: '2rem' }}>
+        <h4 className="card-title"><Calendar size={18} /> Filtros de Período</h4>
+        <div className="row gap wrap" style={{ marginTop: '1rem' }}>
+          <div className="flex-1" style={{ minWidth: '200px' }}>
+            <label className="muted small">Data Inicial</label>
+            <input type="date" className="input w-full" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
+          </div>
+          <div className="flex-1" style={{ minWidth: '200px' }}>
+            <label className="muted small">Data Final</label>
+            <input type="date" className="input w-full" value={dataFim} onChange={e => setDataFim(e.target.value)} />
+          </div>
+          <div className="row gap" style={{ alignSelf: 'flex-end', paddingBottom: '2px' }}>
+            <button className="btn btn-secondary" onClick={() => { setDataInicio(''); setDataFim(''); }}>Limpar Datas</button>
+          </div>
+        </div>
+        <p className="small muted" style={{ marginTop: '1rem' }}>
+          <Info size={14} style={{ marginRight: 4 }} />
+          O filtro de data considera o campo <strong>última atualização</strong> do registro.
+        </p>
+      </section>
+
       <div className="dashboard-grid">
         {/* Exportação de Headsets */}
         <section className="card">
           <h4 className="card-title"><Headphones size={18} /> Headsets</h4>
-          <p className="muted small">Selecione um status específico para filtrar seu relatório.</p>
+          
           <div style={{ marginTop: '1.25rem' }}>
-            <label className="muted small">Filtro de Status</label>
-            <select className="input w-full" style={{ marginTop: '0.5rem' }} value={hsStatus} onChange={e => setHsStatus(e.target.value)}>
+            <label className="muted small">Status</label>
+            <select className="input w-full" value={hsStatus} onChange={e => setHsStatus(e.target.value)}>
               {STATUS_HEADSET.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </div>
-          <div className="row gap" style={{ marginTop: '1.5rem' }}>
+
+          <div style={{ marginTop: '1.5rem' }}>
+            <label className="muted small mb-2 block"><Settings2 size={14} /> Colunas</label>
+            <div className="column-selector">
+              {COLUNAS_HEADSET.map(c => (
+                <label key={c.id} className="col-item">
+                  <input type="checkbox" checked={colsHs.includes(c.id)} onChange={() => toggleCol('hs', c.id)} />
+                  <span>{c.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="row gap" style={{ marginTop: '2rem' }}>
             <button className="btn btn-primary flex-1" disabled={!!loading} onClick={() => exportar('headsets', 'xlsx')}>
               {loading === 'headsets-xlsx' ? <Loader2 size={16} className="animate-spin" /> : <TableIcon size={16} />}
               Excel
@@ -154,14 +263,27 @@ export function ExportarPage() {
         {/* Exportação de Computadores */}
         <section className="card">
           <h4 className="card-title"><Monitor size={18} /> Computadores</h4>
-          <p className="muted small">Gere planilhas detalhadas por PA e hostname.</p>
+          
           <div style={{ marginTop: '1.25rem' }}>
-            <label className="muted small">Filtro de Status</label>
-            <select className="input w-full" style={{ marginTop: '0.5rem' }} value={pcStatus} onChange={e => setPcStatus(e.target.value)}>
+            <label className="muted small">Status</label>
+            <select className="input w-full" value={pcStatus} onChange={e => setPcStatus(e.target.value)}>
               {STATUS_PC.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </div>
-          <div className="row gap" style={{ marginTop: '1.5rem' }}>
+
+          <div style={{ marginTop: '1.5rem' }}>
+            <label className="muted small mb-2 block"><Settings2 size={14} /> Colunas</label>
+            <div className="column-selector">
+              {COLUNAS_PC.map(c => (
+                <label key={c.id} className="col-item">
+                  <input type="checkbox" checked={colsPc.includes(c.id)} onChange={() => toggleCol('pc', c.id)} />
+                  <span>{c.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="row gap" style={{ marginTop: '2rem' }}>
             <button className="btn btn-primary flex-1" disabled={!!loading} onClick={() => exportar('computadores', 'xlsx')}>
               {loading === 'computadores-xlsx' ? <Loader2 size={16} className="animate-spin" /> : <TableIcon size={16} />}
               Excel
@@ -175,19 +297,47 @@ export function ExportarPage() {
         {/* Exportação Completa */}
         <section className="card">
           <h4 className="card-title"><Database size={18} /> Banco de Dados Completo</h4>
-          <p className="muted small">Exporta todos os ativos (Headsets + PCs) em um único arquivo de backup.</p>
-          <div className="row gap" style={{ marginTop: '2.5rem' }}>
+          <p className="muted small">Exporta todos os ativos com os filtros de data aplicados.</p>
+          <div className="row gap" style={{ marginTop: '2rem' }}>
             <button className="btn btn-primary w-full" disabled={!!loading} onClick={() => exportar('tudo', 'xlsx')}>
               {loading === 'tudo-xlsx' ? <Loader2 size={16} className="animate-spin" /> : <TableIcon size={16} />}
-              Backup Full (Excel Multi-aba)
+              Backup Full (Excel)
             </button>
           </div>
           <p className="small muted" style={{ marginTop: '1.5rem' }}>
             <Info size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-            O arquivo Excel conterá abas separadas para cada categoria de ativo.
+            O backup full aplicará a seleção de colunas para cada aba respectiva.
           </p>
         </section>
       </div>
+
+      <style>{`
+        .column-selector {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 0.5rem;
+          padding: 0.75rem;
+          background: var(--bg-secondary);
+          border-radius: var(--radius-md);
+          border: 1px solid var(--border);
+        }
+        .col-item {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-size: 0.75rem;
+          cursor: pointer;
+          color: var(--text-muted);
+        }
+        .col-item input {
+          cursor: pointer;
+        }
+        .col-item:hover {
+          color: var(--text);
+        }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .block { display: block; }
+      `}</style>
     </div>
   )
 }

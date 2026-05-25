@@ -8,7 +8,8 @@ import {
   Trash2, 
   MapPin, 
   Hash,
-  AlertTriangle
+  AlertTriangle,
+  MoreHorizontal
 } from 'lucide-react'
 import { PC_STATUS, labelByValue } from '../constants/status'
 import { Modal } from '../components/Modal'
@@ -39,6 +40,7 @@ function getBadgeClass(status) {
 
 const emptyForm = () => ({
   id: null,
+  nome: '',
   hostname: '',
   serial_number: '',
   status: 'em_uso',
@@ -56,8 +58,14 @@ export function ComputadoresPage() {
   const [error, setError] = useState(null)
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [isCompact, setIsCompact] = useState(() => localStorage.getItem('pc_compact') === 'true')
   const [page, setPage] = useState(0)
   const [modal, setModal] = useState(null)
+
+  // Persistência de modo compacto
+  useEffect(() => {
+    localStorage.setItem('pc_compact', isCompact)
+  }, [isCompact])
 
   // Formatação de data amigável
   function formatUpdatedAt(value) {
@@ -89,7 +97,7 @@ export function ComputadoresPage() {
     return rows.filter((r) => {
       if (statusFilter && String(r.status) !== statusFilter) return false
       if (!s) return true
-      const blob = `${r.hostname} ${r.serial_number} ${r.pa} ${r.status}`.toLowerCase()
+      const blob = `${r.nome} ${r.hostname} ${r.serial_number} ${r.pa} ${r.status}`.toLowerCase()
       return blob.includes(s)
     })
   }, [rows, q, statusFilter])
@@ -109,6 +117,7 @@ export function ComputadoresPage() {
     e.preventDefault()
     const f = modal.form
     const body = {
+      nome: f.nome.trim(),
       hostname: f.hostname.trim(),
       serial_number: f.serial_number.trim(),
       status: f.status,
@@ -143,6 +152,14 @@ export function ComputadoresPage() {
           <p className="page-subtitle" style={{ marginBottom: 0 }}>Gestão de postos de atendimento (PA) e equipamentos.</p>
         </div>
         <div className="row gap">
+          <button 
+            className={`btn btn-secondary ${isCompact ? 'active' : ''}`} 
+            onClick={() => setIsCompact(!isCompact)}
+            title={isCompact ? 'Desativar modo compacto' : 'Ativar modo compacto'}
+          >
+            <MoreHorizontal size={16} />
+            <span className="hide-mobile">{isCompact ? 'Expandir' : 'Compactar'}</span>
+          </button>
           <button className="btn btn-secondary" onClick={load} disabled={loading}>
             <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
             <span className="hide-mobile">Atualizar</span>
@@ -187,33 +204,40 @@ export function ComputadoresPage() {
         <table>
           <thead>
             <tr>
-              <th><MapPin size={14} style={{ marginRight: 4 }} /> PA</th>
+              <th>Identificador / PA</th>
               <th>Hostname</th>
-              <th><Hash size={14} style={{ marginRight: 4 }} /> Nº Série</th>
+              {!isCompact && <th><Hash size={14} style={{ marginRight: 4 }} /> Nº Série</th>}
               <th>Status</th>
-              <th>Atualizado</th>
+              {!isCompact && <th>Atualizado</th>}
               <th style={{ textAlign: 'right' }}>Ações</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="text-center py-8 muted">Carregando...</td></tr>
+              <tr><td colSpan={isCompact ? 4 : 6} className="text-center py-8 muted">Carregando...</td></tr>
             ) : pageItems.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-8 muted">Nenhum computador encontrado.</td></tr>
+              <tr><td colSpan={isCompact ? 4 : 6} className="text-center py-8 muted">Nenhum computador encontrado.</td></tr>
             ) : (
               pageItems.map((r) => (
                 <tr key={r.id}>
-                  <td><strong>{r.pa ?? '—'}</strong></td>
+                  <td>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <strong>{r.nome || r.pa || '—'}</strong>
+                      {isCompact && r.pa && <span className="small muted">{r.pa}</span>}
+                    </div>
+                  </td>
                   <td><code className="mono text-accent">{r.hostname ?? '—'}</code></td>
-                  <td className="mono small">{r.serial_number ?? '—'}</td>
+                  {!isCompact && <td className="mono small">{r.serial_number ?? '—'}</td>}
                   <td>
                     <span className={getBadgeClass(r.status)}>
                       {labelByValue(PC_STATUS, r.status)}
                     </span>
                   </td>
-                  <td className="small muted">
-                    {formatUpdatedAt(r.updated_at ?? r.atualizadoEm ?? r.atualizado_em)}
-                  </td>
+                  {!isCompact && (
+                    <td className="small muted">
+                      {formatUpdatedAt(r.updated_at ?? r.atualizadoEm ?? r.atualizado_em)}
+                    </td>
+                  )}
                   <td style={{ textAlign: 'right' }}>
                     <div className="row gap" style={{ justifyContent: 'flex-end' }}>
                       <button className="btn btn-secondary btn-icon" onClick={() => openEdit(r)}>
@@ -240,6 +264,7 @@ export function ComputadoresPage() {
           footer={<><button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button><button type="submit" form="f-pc" className="btn btn-primary">Salvar</button></>}
         >
           <form id="f-pc" className="form-grid" onSubmit={handleSubmit}>
+            <label className="full">Identificador / Apelido (Opcional)<input className="input" value={modal.form.nome} onChange={e => setModal(m => ({...m, form: {...m.form, nome: e.target.value}}))} placeholder="Ex: PC Recepção, Estação 01..." /></label>
             <label>PA (Mesa / Posto)<input className="input" value={modal.form.pa} onChange={e => setModal(m => ({...m, form: {...m.form, pa: e.target.value}}))} required /></label>
             <label>Hostname<input className="input mono" value={modal.form.hostname} onChange={e => setModal(m => ({...m, form: {...m.form, hostname: e.target.value}}))} required /></label>
             <label>Número de Série<input className="input mono" value={modal.form.serial_number} onChange={e => setModal(m => ({...m, form: {...m.form, serial_number: e.target.value}}))} required /></label>

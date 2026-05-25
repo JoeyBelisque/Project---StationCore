@@ -104,11 +104,29 @@ export function HeadsetsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [q, setQ] = useState('')
-  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '')
-  const [categoriaFilter, setCategoriaFilter] = useState(searchParams.get('categoria') || '')
+  
+  // Filtros Inteligentes: Carrega do localStorage se não houver na URL
+  const [statusFilter, setStatusFilter] = useState(() => 
+    searchParams.get('status') || localStorage.getItem('hs_filter_status') || ''
+  )
+  const [categoriaFilter, setCategoriaFilter] = useState(() => 
+    searchParams.get('categoria') || localStorage.getItem('hs_filter_categoria') || ''
+  )
+  
   const [viewMode, setViewMode] = useState('inventario')
+  const [isCompact, setIsCompact] = useState(() => localStorage.getItem('hs_compact') === 'true')
   const [page, setPage] = useState(0)
   const [modal, setModal] = useState(null)
+
+  // Persistência de modo compacto e filtros
+  useEffect(() => {
+    localStorage.setItem('hs_compact', isCompact)
+  }, [isCompact])
+
+  useEffect(() => {
+    localStorage.setItem('hs_filter_status', statusFilter)
+    localStorage.setItem('hs_filter_categoria', categoriaFilter)
+  }, [statusFilter, categoriaFilter])
 
   // Headsets disponíveis para substituição
   const disponiveisParaTroca = useMemo(() => {
@@ -178,6 +196,7 @@ export function HeadsetsPage() {
   const openEmprestimo = (row) => setModal({ mode: 'vincular', form: { id: row.id, lacre: row.lacre, matricula: row.matricula ?? '', observacoes: row.observacoes ?? '', isEmprestimo: true } })
   const openTrocaLacre = (row) => setModal({ mode: 'trocaLacre', form: { id: row.id, lacreAtual: row.lacre, novoLacre: '', observacao: '' } })
   const openTroca = (row) => setModal({ mode: 'troca', headset: row, form: { id_novo: '', status_novo_original: 'defeito', observacao: '' } })
+  const openRetornoManutencao = (row) => setModal({ mode: 'retornoManutencao', form: { id: row.id, lacre: row.lacre, custo: '', pecas: '', observacao: '' } })
   const openAcoes = (row) => setModal({ mode: 'acoes', headset: row })
 
   // Carregamento de histórico
@@ -331,6 +350,23 @@ export function HeadsetsPage() {
     } catch (err) { addToast(err.message || 'Erro ao excluir', 'error') }
   }
 
+  // Retorno de Manutenção com Registro de Custo
+  async function handleRetornoManutencao(e) {
+    e.preventDefault()
+    const f = modal.form
+    try {
+      await atualizarHeadset(f.id, {
+        status: 'estoque',
+        custo_reparo: parseFloat(f.custo) || 0,
+        pecas_trocadas: f.pecas.trim(),
+        observacoes: `Retorno de manutenção em ${new Date().toLocaleDateString('pt-BR')}. ${f.observacao}`.trim()
+      })
+      setModal(null)
+      addToast('Equipamento retornou ao estoque com sucesso!')
+      await load()
+    } catch (err) { addToast(err.message || 'Erro ao processar retorno', 'error') }
+  }
+
   return (
     <div className="page-fade-in">
       <header className="page-header-premium" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
@@ -339,6 +375,14 @@ export function HeadsetsPage() {
           <p className="page-subtitle" style={{ marginBottom: 0 }}>Gestão de inventário e atribuição de equipamentos.</p>
         </div>
         <div className="row gap">
+          <button 
+            className={`btn btn-secondary ${isCompact ? 'active' : ''}`} 
+            onClick={() => setIsCompact(!isCompact)}
+            title={isCompact ? 'Desativar modo compacto' : 'Ativar modo compacto'}
+          >
+            <MoreHorizontal size={16} />
+            <span className="hide-mobile">{isCompact ? 'Expandir' : 'Compactar'}</span>
+          </button>
           <button className="btn btn-secondary" onClick={load} disabled={loading}>
             <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
             <span className="hide-mobile">Atualizar</span>
@@ -413,38 +457,45 @@ export function HeadsetsPage() {
           <thead>
             <tr>
               <th>Nome / Identificador</th>
-              <th>Matrícula</th>
+              {!isCompact && <th>Matrícula</th>}
               <th>Lacre</th>
-              <th>Marca</th>
-              <th>Série</th>
+              {!isCompact && <th>Marca</th>}
+              {!isCompact && <th>Série</th>}
               <th>Status</th>
-              <th>Categoria</th>
-              <th>Última Alt.</th>
+              {!isCompact && <th>Categoria</th>}
+              {!isCompact && <th>Última Alt.</th>}
               <th style={{ textAlign: 'right' }}>Ações</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} className="text-center py-8 muted">Carregando dados...</td></tr>
+              <tr><td colSpan={isCompact ? 4 : 9} className="text-center py-8 muted">Carregando dados...</td></tr>
             ) : pageItems.length === 0 ? (
-              <tr><td colSpan={9} className="text-center py-8 muted">Nenhum registro encontrado.</td></tr>
+              <tr><td colSpan={isCompact ? 4 : 9} className="text-center py-8 muted">Nenhum registro encontrado.</td></tr>
             ) : (
               pageItems.map((h) => (
                 <tr key={h.id}>
-                  <td><strong>{h.nome || h.lacre}</strong></td>
-                  <td>{h.matricula || '—'}</td>
+                  <td>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <strong>{h.nome || h.lacre}</strong>
+                      {isCompact && h.matricula && <span className="small muted">Op: {h.matricula}</span>}
+                    </div>
+                  </td>
+                  {!isCompact && <td>{h.matricula || '—'}</td>}
                   <td><code className="mono text-accent">{h.lacre}</code></td>
-                  <td>{h.marca || '—'}</td>
-                  <td className="mono small">{h.numeroSerie || '—'}</td>
+                  {!isCompact && <td>{h.marca || '—'}</td>}
+                  {!isCompact && <td className="mono small">{h.numeroSerie || '—'}</td>}
                   <td>
                     <span className={getBadgeClass(h.status)}>
                       {labelByValue(HEADSET_STATUS, h.status)}
                     </span>
                   </td>
-                  <td><span className="muted small">{categoryLabel(h.categoria)}</span></td>
-                  <td className="small muted">
-                    {h.atualizadoEm ? new Date(h.atualizadoEm).toLocaleDateString('pt-BR') : '—'}
-                  </td>
+                  {!isCompact && <td><span className="muted small">{categoryLabel(h.categoria)}</span></td>}
+                  {!isCompact && (
+                    <td className="small muted">
+                      {h.atualizadoEm ? new Date(h.atualizadoEm).toLocaleDateString('pt-BR') : '—'}
+                    </td>
+                  )}
                   <td style={{ textAlign: 'right' }}>
                     <div className="row gap" style={{ justifyContent: 'flex-end' }}>
                       <button className="btn btn-secondary btn-icon" title="Ações Rápidas" onClick={() => openAcoes(h)}>
@@ -534,8 +585,8 @@ export function HeadsetsPage() {
             )}
 
             {(modal.headset.status === 'defeito' || modal.headset.status === 'manutencao') && (
-              <button className="btn btn-secondary w-full" style={{ color: 'var(--success)' }} onClick={() => handleStatusRapido(modal.headset, 'estoque')}>
-                <CheckCircle size={16} /> Retorno da Manutenção
+              <button className="btn btn-secondary w-full" style={{ color: 'var(--success)' }} onClick={() => openRetornoManutencao(modal.headset)}>
+                <CheckCircle size={16} /> Registrar Retorno de Manutenção
               </button>
             )}
 
@@ -624,6 +675,21 @@ export function HeadsetsPage() {
             </label>
 
             <label className="full">Observações Adicional<textarea className="input" rows={3} value={modal.form.observacao} onChange={e => setModal(m => ({...m, form: {...m.form, observacao: e.target.value}}))} placeholder="Descreva o defeito ou circunstância..." /></label>
+          </form>
+        </Modal>
+      )}
+
+      {/* Modal: Retorno de Manutenção */}
+      {modal?.mode === 'retornoManutencao' && (
+        <Modal 
+          title={`Retorno de Manutenção: ${modal.form.lacre}`} 
+          onClose={() => setModal(null)}
+          footer={<><button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button><button type="submit" form="f-retorno" className="btn btn-primary" style={{ background: 'var(--success)' }}>Efetivar Retorno</button></>}
+        >
+          <form id="f-retorno" className="form-grid" onSubmit={handleRetornoManutencao}>
+            <label className="full">Custo do Reparo (R$)<input type="number" step="0.01" className="input" value={modal.form.custo} onChange={e => setModal(m => ({...m, form: {...m.form, custo: e.target.value}}))} placeholder="0.00" autoFocus /></label>
+            <label className="full">Peças Trocadas / Serviços<textarea className="input" rows={2} value={modal.form.pecas} onChange={e => setModal(m => ({...m, form: {...m.form, pecas: e.target.value}}))} placeholder="Ex: Troca de cabo, espuma nova..." /></label>
+            <label className="full">Observações Adicionais<textarea className="input" rows={2} value={modal.form.observacao} onChange={e => setModal(m => ({...m, form: {...m.form, observacao: e.target.value}}))} /></label>
           </form>
         </Modal>
       )}

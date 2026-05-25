@@ -20,6 +20,7 @@ import {
   atualizarUsuario,
   removerUsuario
 } from '../services/usuariosApi'
+import { isAdmin } from '../lib/auth'
 
 const emptyForm = () => ({
   id: null,
@@ -99,9 +100,11 @@ export function UsuariosPage() {
           <button className="btn btn-secondary" onClick={load} disabled={loading}>
             <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
-          <button className="btn btn-primary" onClick={openNew}>
-            <Plus size={16} /> Novo Usuário
-          </button>
+          {isAdmin() && (
+            <button className="btn btn-primary" onClick={openNew}>
+              <Plus size={16} /> Novo Usuário
+            </button>
+          )}
         </div>
       </header>
 

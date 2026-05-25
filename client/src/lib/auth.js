@@ -14,7 +14,12 @@ export function getStoredSession() {
 }
 
 export function getStoredUser() {
-  return getStoredSession()?.user ?? null
+  return getStoredSession()?.usuario ?? getStoredSession()?.user ?? null
+}
+
+export function isAdmin() {
+  const user = getStoredUser()
+  return user?.role === 'admin'
 }
 
 export function getAuthToken() {
