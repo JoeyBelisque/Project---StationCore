@@ -177,6 +177,12 @@ body {
   transition: margin-left 0.3s ease;
 }
 
+@media (max-width: 1024px) {
+  .main-wrapper {
+    margin-left: 0;
+  }
+}
+
 .top-bar {
   height: var(--header-height);
   background: rgba(var(--bg-rgb), 0.8);
@@ -193,7 +199,7 @@ body {
 
 @media (min-width: 768px) {
   .top-bar {
-    padding: 0 2rem;
+    padding: 0 1.5rem;
   }
 }
 
@@ -243,8 +249,8 @@ body {
 
 /* Page Content */
 .page-content {
-  padding: 1.5rem;
-  max-width: 1400px;
+  padding: 1rem;
+  max-width: 1600px;
   width: 100%;
   margin: 0 auto;
 }
@@ -342,25 +348,31 @@ body {
   gap: 0.5rem;
 }
 
-/* Grids */
+/* Grids Otimizados */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: 1fr;
   gap: 1rem;
   margin-bottom: 2rem;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 480px) {
   .dashboard-grid {
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   }
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1280px) {
   .dashboard-grid {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 1.5rem;
   }
+}
+
+/* Donut adjustments */
+.donut-container svg {
+  max-width: 100%;
+  height: auto;
 }
 
 /* Stat Cards */
@@ -743,17 +755,21 @@ body {
   gap: 1rem;
 }
 
-/* Toolbar Premium */
+/* Toolbar Premium Responsive */
 .toolbar-premium {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
 
 @media (min-width: 768px) {
   .toolbar-premium {
-    grid-template-columns: 1fr auto auto;
+    flex-direction: row;
+    align-items: center;
+  }
+  .toolbar-premium > *:first-child {
+    flex: 1;
   }
 }
 
@@ -838,7 +854,7 @@ code, .mono {
   white-space: pre-wrap;
 }
 
-/* Tables */
+/* Tables Responsive Wrapper */
 .table-container {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -846,12 +862,22 @@ code, .mono {
   overflow-x: auto;
   margin-top: 1.5rem;
   box-shadow: var(--shadow-md);
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 800px;
+  min-width: 700px; /* Reduced slightly for better fit */
+}
+
+@media (max-width: 640px) {
+  table {
+    min-width: 600px;
+  }
+  td, th {
+    padding: 0.75rem 1rem;
+  }
 }
 
 th {
@@ -1208,6 +1234,81 @@ tr:hover td {
 .premium-list.small li {
   font-size: 0.8125rem;
   gap: 0.5rem;
+}
+
+/* Detail and Info Displays */
+.detail-grid-premium {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .detail-grid-premium {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.detail-section.full {
+  grid-column: 1 / -1;
+}
+
+.prop-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.prop-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.prop-value {
+  font-size: 0.9375rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.prop-value.mono {
+  font-family: var(--font-mono);
+  color: var(--accent-light);
+}
+
+/* Checkboxes and Selection */
+.btn-icon-minimal {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+  transition: var(--transition);
+}
+
+.btn-icon-minimal:hover {
+  background: var(--surface-hover);
+  color: var(--accent);
+}
+
+.selected-row {
+  background: var(--accent-glow) !important;
+}
+
+.selected-row td {
+  border-bottom-color: rgba(14, 165, 233, 0.2);
 }
 
 /* Scrollbar Customizada */

@@ -46,6 +46,13 @@ export async function trocarHeadset(id, body) {
   })
 }
 
+export async function desligarOperador(matricula, body) {
+  return fetchJson(`/headsets/desligamento/${encodeURIComponent(matricula)}`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export async function listarHistoricoHeadset(id) {
   return fetchJson(`/headsets/${encodeURIComponent(id)}/historico`)
 }

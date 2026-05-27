@@ -49,8 +49,8 @@ function StatCard({ label, value, hint, icon: Icon, to, colorClass = 'accent', l
  * Componente DonutChart (SVG Customizado)
  */
 function DonutChart({ data = [], loading }) {
-  const size = 180
-  const strokeWidth = 18
+  const size = 220 // Increased from 180
+  const strokeWidth = 22 // Increased from 18
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
 
@@ -521,12 +521,12 @@ export function Dashboard() {
         /* Estilos de Alertas */
         .alerts-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          grid-template-columns: 1fr;
           gap: 1rem;
         }
-        @media (min-width: 768px) {
+        @media (min-width: 640px) {
           .alerts-grid {
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 1.25rem;
           }
         }

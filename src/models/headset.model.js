@@ -12,7 +12,9 @@ async function ensureSchema() {
     ALTER TABLE headsets
       ADD COLUMN IF NOT EXISTS categoria TEXT NOT NULL DEFAULT 'estoque',
       ADD COLUMN IF NOT EXISTS nome TEXT NOT NULL DEFAULT '',
-      ADD COLUMN IF NOT EXISTS data_devolucao TIMESTAMPTZ;
+      ADD COLUMN IF NOT EXISTS nome_operador TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS data_devolucao TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS data_envio_manutencao TIMESTAMPTZ;
   `);
   await pool.query(`
     ALTER TABLE headsets
@@ -53,27 +55,35 @@ function normalizeNumeroSerie(value) {
   return cleaned || null;
 }
 
-function deriveCategoria(status) {
-  const s = String(status ?? "").trim().toLowerCase();
-  if (s === 'em_uso') return 'operacao';
-  if (s === 'emprestimo') return 'emprestimo';
-  if (s === 'entrega') return 'entrega';
-  if (s === 'defeito' || s === 'manutencao') return 'manutencao';
-  return 'estoque';
-}
-
 function normalizePayload(data) {
-  const status = String(data?.status ?? "estoque").trim() || "estoque";
+  let status = String(data?.status ?? "estoque").trim() || "estoque";
+  const categoria = String(data?.categoria ?? "estoque").trim() || "estoque";
+  const matricula = String(data?.matricula ?? "").trim();
+  const nome_operador = String(data?.nome_operador ?? "").trim();
+  
+  // REGRA DE OURO: Consistência de Dados
+  // 1. Se informou matrícula ou nome de operador, o status NÃO PODE ser 'estoque'
+  if ((matricula || nome_operador) && (status === "estoque" || status === "reserva")) {
+    status = "em_uso"; // Força para 'em_uso' se houver operador
+  }
+
+  // 2. Se o status for 'estoque', 'defeito', 'manutencao' ou 'perdido', limpamos o operador por segurança
+  const statusSemOperador = ["estoque", "reserva", "defeito", "manutencao", "perdido", "furtado"];
+  const finalMatricula = statusSemOperador.includes(status) ? "" : matricula;
+  const finalNomeOperador = statusSemOperador.includes(status) ? "" : nome_operador;
+
   return {
     nome: String(data?.nome ?? "").trim(),
-    matricula: String(data?.matricula ?? "").trim(),
+    nome_operador: finalNomeOperador,
+    matricula: finalMatricula,
     lacre: String(data?.lacre ?? "").trim(),
     marca: normalizeMarca(data?.marca),
     numero_serie: normalizeNumeroSerie(data?.numero_serie),
     status,
-    categoria: deriveCategoria(status),
+    categoria,
     observacoes: String(data?.observacoes ?? "").trim(),
     data_devolucao: data?.data_devolucao ? new Date(data.data_devolucao) : null,
+    data_envio_manutencao: data?.data_envio_manutencao ? new Date(data.data_envio_manutencao) : null,
   };
 }
 
@@ -96,7 +106,7 @@ async function addHistoryEntry(client, headsetId, acao, campo, valorAnterior, va
 export async function getHeadsets() {
   await ensureSchema();
   const result = await pool.query(
-    `SELECT id, nome, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, created_at, updated_at
+    `SELECT id, nome, nome_operador, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, data_envio_manutencao, created_at, updated_at
      FROM headsets
      ORDER BY updated_at DESC`
   );
@@ -110,11 +120,12 @@ export async function createHeadset(data) {
   try {
     await client.query("BEGIN");
     const result = await client.query(
-      `INSERT INTO headsets (nome, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING id, nome, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, created_at, updated_at`,
+      `INSERT INTO headsets (nome, nome_operador, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, data_envio_manutencao)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING id, nome, nome_operador, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, data_envio_manutencao, created_at, updated_at`,
       [
         payload.nome,
+        payload.nome_operador,
         payload.matricula,
         payload.lacre,
         payload.marca,
@@ -123,6 +134,7 @@ export async function createHeadset(data) {
         payload.categoria,
         payload.observacoes,
         payload.data_devolucao,
+        payload.data_envio_manutencao,
       ]
     );
     const row = result.rows[0];
@@ -153,20 +165,23 @@ export async function updateHeadset(id, data) {
     const result = await client.query(
       `UPDATE headsets SET
          nome = $2,
-         matricula = $3,
-         lacre = $4,
-         marca = $5,
-         numero_serie = $6,
-         status = $7,
-         categoria = $8,
-         observacoes = $9,
-         data_devolucao = $10,
+         nome_operador = $3,
+         matricula = $4,
+         lacre = $5,
+         marca = $6,
+         numero_serie = $7,
+         status = $8,
+         categoria = $9,
+         observacoes = $10,
+         data_devolucao = $11,
+         data_envio_manutencao = $12,
          updated_at = NOW()
        WHERE id = $1
-       RETURNING id, nome, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, created_at, updated_at`,
+       RETURNING id, nome, nome_operador, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, data_envio_manutencao, created_at, updated_at`,
       [
         id,
         payload.nome,
+        payload.nome_operador,
         payload.matricula,
         payload.lacre,
         payload.marca,
@@ -175,11 +190,12 @@ export async function updateHeadset(id, data) {
         payload.categoria,
         payload.observacoes,
         payload.data_devolucao,
+        payload.data_envio_manutencao,
       ]
     );
     const updated = result.rows[0];
 
-    const tracked = ["nome", "matricula", "lacre", "marca", "numero_serie", "status", "categoria", "observacoes", "data_devolucao"];
+    const tracked = ["nome", "nome_operador", "matricula", "lacre", "marca", "numero_serie", "status", "categoria", "observacoes", "data_devolucao", "data_envio_manutencao"];
     for (const field of tracked) {
       if ((current[field] ?? null) !== (updated[field] ?? null)) {
         await addHistoryEntry(
@@ -222,7 +238,7 @@ export async function trocarLacre(id, novoLacre, observacao = "") {
       `UPDATE headsets
        SET lacre = $2, updated_at = NOW()
        WHERE id = $1
-       RETURNING id, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, created_at, updated_at`,
+       RETURNING id, nome, nome_operador, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, data_envio_manutencao, created_at, updated_at`,
       [id, lacre]
     );
     await addHistoryEntry(client, id, "troca_lacre", "lacre", current.lacre, lacre, observacao);
@@ -248,6 +264,7 @@ export async function swapHeadset(idOriginal, idNovo, novoStatusOriginal, observ
     if (!original) throw new Error("Headset original não encontrado");
 
     const matricula = original.matricula;
+    const nomeOperador = original.nome_operador;
     if (!matricula) throw new Error("O headset original não possui um operador vinculado");
 
     // 2. Pega dados do novo (quem está entrando)
@@ -260,7 +277,7 @@ export async function swapHeadset(idOriginal, idNovo, novoStatusOriginal, observ
 
     // 3. Atualiza o original (vai para defeito, perdido ou furtado e perde a matrícula)
     await client.query(
-      `UPDATE headsets SET status = $1, matricula = '', updated_at = NOW() WHERE id = $2`,
+      `UPDATE headsets SET status = $1, matricula = '', nome_operador = '', updated_at = NOW() WHERE id = $2`,
       [novoStatusOriginal, idOriginal]
     );
     await addHistoryEntry(client, idOriginal, "troca_saida", "status", original.status, novoStatusOriginal, observacao);
@@ -268,11 +285,10 @@ export async function swapHeadset(idOriginal, idNovo, novoStatusOriginal, observ
 
     // 4. Atualiza o novo (recebe a matrícula do operador e muda status para o mesmo do original antes da troca)
     const novoStatusNovo = original.status === 'emprestimo' ? 'emprestimo' : 'em_uso';
-    const novaCategoriaNovo = deriveCategoria(novoStatusNovo);
 
     await client.query(
-      `UPDATE headsets SET matricula = $1, status = $2, categoria = $3, updated_at = NOW() WHERE id = $4`,
-      [matricula, novoStatusNovo, novaCategoriaNovo, idNovo]
+      `UPDATE headsets SET matricula = $1, nome_operador = $2, status = $3, updated_at = NOW() WHERE id = $4`,
+      [matricula, nomeOperador, novoStatusNovo, idNovo]
     );
     await addHistoryEntry(client, idNovo, "troca_entrada", "matricula", "", matricula, `Substituindo o lacre ${original.lacre}`);
     await addHistoryEntry(client, idNovo, "troca_entrada", "status", novo.status, novoStatusNovo, "Troca realizada");
@@ -282,6 +298,56 @@ export async function swapHeadset(idOriginal, idNovo, novoStatusOriginal, observ
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function desligamentoPorMatricula(matricula, observacao = "") {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Busca todos os headsets vinculados a essa matrícula
+    const res = await client.query(
+      `SELECT id, status, nome_operador, lacre FROM headsets WHERE matricula = $1`,
+      [matricula]
+    );
+    
+    if (res.rows.length === 0) {
+      throw new Error(`Nenhum equipamento encontrado para a matrícula ${matricula}`);
+    }
+
+    const dataHora = new Date().toLocaleString("pt-BR");
+    const logBase = `[DESLIGAMENTO] ${dataHora}: ${observacao}`.trim();
+
+    for (const h of res.rows) {
+      await client.query(
+        `UPDATE headsets SET 
+          status = 'estoque', 
+          matricula = '', 
+          nome_operador = '', 
+          updated_at = NOW() 
+        WHERE id = $1`,
+        [h.id]
+      );
+
+      await addHistoryEntry(
+        client, 
+        h.id, 
+        "desligamento", 
+        "status", 
+        h.status, 
+        "estoque", 
+        logBase
+      );
+    }
+
+    await client.query("COMMIT");
+    return { count: res.rows.length };
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
   } finally {
     client.release();
   }
@@ -330,24 +396,27 @@ export async function updateBatch(ids, data) {
     
     // Normaliza apenas os campos permitidos para batch
     const status = data.status ? String(data.status).trim() : null;
-    const categoria = status ? deriveCategoria(status) : null;
+    const isReturningToStock = status === 'estoque' || status === 'reserva';
+    const isSendingToMaint = status === 'manutencao';
     const observacoesAdd = data.observacoes ? String(data.observacoes).trim() : "";
 
     for (const id of ids) {
       // Busca atual para log de histórico
-      const currentRes = await client.query(`SELECT status, categoria, observacoes FROM headsets WHERE id = $1`, [id]);
+      const currentRes = await client.query(`SELECT status, categoria, observacoes, matricula, nome_operador, data_envio_manutencao FROM headsets WHERE id = $1`, [id]);
       if (currentRes.rowCount === 0) continue;
       const current = currentRes.rows[0];
 
       const nextStatus = status || current.status;
-      const nextCategoria = categoria || current.categoria;
+      const nextMatricula = isReturningToStock ? "" : current.matricula;
+      const nextNomeOperador = isReturningToStock ? "" : current.nome_operador;
+      const nextMaintDate = isSendingToMaint ? (current.data_envio_manutencao || new Date()) : (isReturningToStock ? null : current.data_envio_manutencao);
       const nextObs = observacoesAdd 
         ? (current.observacoes ? `${current.observacoes}\n${observacoesAdd}` : observacoesAdd)
         : current.observacoes;
 
       await client.query(
-        `UPDATE headsets SET status = $1, categoria = $2, observacoes = $3, updated_at = NOW() WHERE id = $4`,
-        [nextStatus, nextCategoria, nextObs, id]
+        `UPDATE headsets SET status = $1, observacoes = $2, matricula = $3, nome_operador = $4, data_envio_manutencao = $5, updated_at = NOW() WHERE id = $6`,
+        [nextStatus, nextObs, nextMatricula, nextNomeOperador, nextMaintDate, id]
       );
 
       // Loga mudança de status se houver

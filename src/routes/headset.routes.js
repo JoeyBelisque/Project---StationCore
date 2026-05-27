@@ -7,6 +7,7 @@ import {
   atualizar,
   atualizarLacre,
   criar,
+  desligamento,
   historico,
   listar,
   remover,
@@ -30,6 +31,7 @@ router.post("/batch", async (req, res, next) => {
     next(e);
   }
 });
+router.post("/desligamento/:matricula", desligamento);
 router.post("/", criar);
 router.put("/:id", atualizar);
 router.patch("/:id/lacre", atualizarLacre);

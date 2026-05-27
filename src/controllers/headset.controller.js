@@ -121,6 +121,23 @@ export const trocar = async (req, res, next) => {
   }
 };
 
+export const desligamento = async (req, res, next) => {
+  try {
+    const { matricula } = req.params;
+    const { observacao } = req.body ?? {};
+
+    if (!matricula) {
+      res.status(400).json({ error: "matricula é obrigatória" });
+      return;
+    }
+
+    const result = await Headset.desligamentoPorMatricula(matricula, observacao ?? "");
+    res.json(result);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+};
+
 export const historico = async (req, res, next) => {
   try {
     const data = await Headset.getHeadsetHistorico(req.params.id);

@@ -9,7 +9,11 @@ import {
   Info,
   Loader2,
   Calendar,
-  Settings2
+  Settings2,
+  BarChart3,
+  TrendingUp,
+  DollarSign,
+  Wrench
 } from 'lucide-react'
 import { listarHeadsets } from '../services/headsetsApi'
 import { listarComputadores } from '../services/computadoresApi'
@@ -126,6 +130,75 @@ export function ExportarPage() {
       setColsHs(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])
     } else {
       setColsPc(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])
+    }
+  }
+
+  // Gera Resumo Estatístico (Relatório Gerencial)
+  async function exportarResumo() {
+    setLoading('resumo')
+    setFeedback(null)
+    try {
+      const [headsets, pcs] = await Promise.all([listarHeadsets(), listarComputadores()])
+      
+      const hsFiltrados = filtrarPorData(headsets)
+      const pcFiltrados = filtrarPorData(pcs)
+
+      // 1. Manutenções e Custos (Extraído das observações via regex para simplicidade)
+      let totalCustoManutencao = 0
+      let qtdManutencoes = 0
+      
+      hsFiltrados.forEach(h => {
+        if (h.status === 'manutencao' || h.observacoes?.includes('manutenção')) {
+          qtdManutencoes++
+          // Busca "Custo: R$XX,XX" nas observações
+          const match = h.observacoes?.match(/Custo:\s*R\$?\s*(\d+[.,]\d+)/i)
+          if (match) {
+            const valor = parseFloat(match[1].replace(',', '.'))
+            if (!isNaN(valor)) totalCustoManutencao += valor
+          }
+        }
+      })
+
+      // 2. Novos Cadastros no Período
+      const novosHS = hsFiltrados.filter(h => {
+        const created = new Date(h.created_at)
+        if (dataInicio && created < new Date(dataInicio)) return false
+        if (dataFim && created > new Date(dataFim + 'T23:59:59')) return false
+        return true
+      }).length
+
+      const novosPC = pcFiltrados.filter(p => {
+        const created = new Date(p.created_at)
+        if (dataInicio && created < new Date(dataInicio)) return false
+        if (dataFim && created > new Date(dataFim + 'T23:59:59')) return false
+        return true
+      }).length
+
+      // 3. Monta o Excel de Resumo
+      const resumoData = [
+        { INDICADOR: 'PERÍODO', VALOR: `${dataInicio || 'Início'} até ${dataFim || 'Hoje'}` },
+        { INDICADOR: '', VALOR: '' },
+        { INDICADOR: '--- HEADSETS ---', VALOR: '' },
+        { INDICADOR: 'Novos Equipamentos Cadastrados', VALOR: novosHS },
+        { INDICADOR: 'Equipamentos Enviados/Retornados Manut.', VALOR: qtdManutencoes },
+        { INDICADOR: 'Investimento Total em Reparos', VALOR: `R$ ${totalCustoManutencao.toFixed(2)}` },
+        { INDICADOR: '', VALOR: '' },
+        { INDICADOR: '--- COMPUTADORES ---', VALOR: '' },
+        { INDICADOR: 'Novos Equipamentos Cadastrados', VALOR: novosPC },
+        { INDICADOR: 'Total Ativos no Período (Atualizados)', VALOR: pcFiltrados.length },
+      ]
+
+      const wb = XLSX.utils.book_new()
+      const ws = XLSX.utils.json_to_sheet(resumoData)
+      XLSX.utils.book_append_sheet(wb, ws, 'Resumo Gerencial')
+      XLSX.writeFile(wb, `resumo_estatistico_${hoje()}.xlsx`)
+
+      setFeedback({ tipo: 'success', msg: 'Resumo gerencial gerado com sucesso.' })
+    } catch (err) {
+      console.error(err)
+      setFeedback({ tipo: 'error', msg: 'Falha ao gerar resumo.' })
+    } finally {
+      setLoading(null)
     }
   }
 
@@ -309,9 +382,46 @@ export function ExportarPage() {
             O backup full aplicará a seleção de colunas para cada aba respectiva.
           </p>
         </section>
+
+        {/* Novo: Resumo Gerencial */}
+        <section className="card" style={{ background: 'var(--accent-glow)', borderColor: 'var(--accent)' }}>
+          <h4 className="card-title" style={{ color: 'var(--accent-light)' }}><BarChart3 size={18} /> Resumo Gerencial</h4>
+          <p className="muted small">Gera um relatório executivo com métricas de custo, manutenções e novos ativos no período selecionado.</p>
+          
+          <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="metric-preview">
+              <div className="row gap">
+                <TrendingUp size={16} className="text-success" />
+                <span className="small">Indicadores de Crescimento</span>
+              </div>
+              <div className="row gap">
+                <DollarSign size={16} className="text-accent" />
+                <span className="small">Controle de Custos</span>
+              </div>
+              <div className="row gap">
+                <Wrench size={16} className="text-warning" />
+                <span className="small">Fluxo de Manutenção</span>
+              </div>
+            </div>
+
+            <button className="btn btn-primary w-full" style={{ background: 'var(--accent)' }} disabled={!!loading} onClick={exportarResumo}>
+              {loading === 'resumo' ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} />}
+              Gerar Relatório Gerencial (Excel)
+            </button>
+          </div>
+        </section>
       </div>
 
       <style>{`
+        .metric-preview {
+          padding: 1rem;
+          background: rgba(var(--bg-rgb), 0.5);
+          border-radius: var(--radius-sm);
+          border: 1px dashed var(--accent);
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
         .column-selector {
           display: grid;
           grid-template-columns: 1fr 1fr;
