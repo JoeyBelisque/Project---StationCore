@@ -22,12 +22,15 @@ export async function importarHeadsets(file, modo = 'validar') {
       body: formData,
     })
 
-    let data
-    try {
-      data = await response.json()
-    } catch (e) {
-      console.error('Erro ao parsear JSON:', e)
-      throw new Error(`Resposta inválida do servidor: ${response.statusText}`)
+    const data = await response.json().catch(() => null)
+    
+    if (!data) {
+      throw new Error(`Resposta inválida do servidor: ${response.status}`)
+    }
+
+    // Se for erro de validação (400), retornamos o corpo para o componente tratar
+    if (response.status === 400 && !data.ok && data.errors) {
+      return data
     }
 
     if (!response.ok) {
@@ -54,12 +57,16 @@ export async function importarComputadores(file, modo = 'validar') {
       body: formData,
     })
 
-    let data
-    try {
-      data = await response.json()
-    } catch (e) {
-      console.error('Erro ao parsear JSON:', e)
-      throw new Error(`Resposta inválida do servidor: ${response.statusText}`)
+    const data = await response.json().catch(() => null)
+    
+    if (!data) {
+      throw new Error(`Resposta inválida do servidor: ${response.status}`)
+    }
+
+    // Se for erro de validação (400), retornamos o corpo para o componente tratar
+    if (response.status === 400 && !data.ok && data.errors) {
+      console.warn('[Import] Validação falhou, retornando erros detalhados:', data.errors);
+      return data
     }
 
     if (!response.ok) {

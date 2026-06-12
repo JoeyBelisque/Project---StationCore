@@ -49,8 +49,8 @@ function StatCard({ label, value, hint, icon: Icon, to, colorClass = 'accent', l
  * Componente DonutChart (SVG Customizado)
  */
 function DonutChart({ data = [], loading }) {
-  const size = 220 // Increased from 180
-  const strokeWidth = 22 // Increased from 18
+  const size = 240 
+  const strokeWidth = 24 
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
 
@@ -61,7 +61,7 @@ function DonutChart({ data = [], loading }) {
   if (loading || total === 0) {
     return (
       <div className="donut-container loading">
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ maxWidth: '100%', height: 'auto' }}>
           <circle 
             cx={size / 2} cy={size / 2} r={radius} 
             fill="transparent" stroke="var(--border)" strokeWidth={strokeWidth} 
@@ -77,7 +77,7 @@ function DonutChart({ data = [], loading }) {
 
   return (
     <div className="donut-container">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ maxWidth: '100%', height: 'auto' }}>
         {chartData.map((item, idx) => {
           const val = Number(item.value) || 0
           const percentage = (val / total) * 100
@@ -373,59 +373,85 @@ export function Dashboard() {
       </div>
 
       {/* Saúde do Inventário com Gráfico e Legenda */}
-      <div className="inner-grid inner-grid-2" style={{ marginTop: '3rem', gap: '1.5rem' }}>
-        <section className="card">
+      <div className="inner-grid inner-grid-2" style={{ marginTop: '3rem', gap: '1.5rem', alignItems: 'stretch' }}>
+        <section className="card" style={{ display: 'flex', flexDirection: 'column' }}>
           <h4 className="card-title"><Headphones size={18} /> Saúde do Inventário</h4>
-          <div className="row wrap" style={{ justifyContent: 'space-around', gap: '2rem', padding: '1rem 0' }}>
-            <DonutChart data={hsBars} loading={loading} />
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="row wrap" style={{ justifyContent: 'center', alignItems: 'center', gap: '2.5rem', width: '100%', padding: '1rem 0' }}>
+              <DonutChart data={hsBars} loading={loading} />
 
-            <div className="chart-legend">
-              {hsBars.map(item => (
-                <div key={item.label} className="legend-item">
-                  <span className="dot" style={{ backgroundColor: item.color }} />
-                  <span className="label">{item.label}</span>
-                  <strong className="value">{item.value}</strong>
-                </div>
-              ))}
+              <div className="chart-legend">
+                {hsBars.map(item => (
+                  <div key={item.label} className="legend-item">
+                    <span className="dot" style={{ backgroundColor: item.color }} />
+                    <span className="label">{item.label}</span>
+                    <strong className="value">{item.value}</strong>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="card">
+        <section className="card" style={{ display: 'flex', flexDirection: 'column' }}>
           <h4 className="card-title"><History size={18} /> Atividades Recentes</h4>
-          <div style={{ maxHeight: '350px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+          <div style={{ flex: 1, maxHeight: '380px', overflowY: 'auto', paddingRight: '0.5rem' }}>
             <ActivityLog activities={atividades} loading={loadingAtividades} />
           </div>
         </section>
       </div>
 
       {/* Desempenho por Marca */}
-      <h3 className="section-title" style={{ marginTop: '3rem' }}>Análise de Qualidade</h3>
-      <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+      <h3 className="section-title" style={{ marginTop: '3rem', marginBottom: '1.25rem' }}>Análise de Qualidade</h3>
+      <div className="brand-stats-grid">
         {brandStats.map(s => (
-          <section key={s.brand} className="card">
-            <div className="row space-between" style={{ marginBottom: '1rem' }}>
-              <h4 className="card-title" style={{ margin: 0, textTransform: 'capitalize' }}>{s.brand}</h4>
+          <section key={s.brand} className="card brand-stat-card">
+            <div className="card-header">
+              <h4 className="card-title">{s.brand}</h4>
               <span className={`badge ${parseFloat(s.rate) > 15 ? 'badge-danger' : 'badge-success'}`}>
-                {s.rate}% Defeito
+                {s.rate}% <span className="label-text">Defeito</span>
               </span>
             </div>
-            <div className="performance-bar-container">
-              <div 
-                className="performance-bar-fill" 
-                style={{ 
+            
+            <div className="card-body">
+              <div className="stat-item">
+                <span className="prop-label">Total</span>
+                <span className="prop-value">{s.total}</span>
+              </div>
+              <div className="stat-item">
+                <span className="prop-label">Manutenção</span>
+                <span className={`prop-value ${parseFloat(s.defeitos) > 0 ? 'text-warning' : ''}`}>
+                  {s.defeitos}
+                </span>
+              </div>
+            </div>
+
+            <div className="progress-bar-container">
+              <div
+                className="progress-bar-fill"
+                style={{
                   width: `${100 - parseFloat(s.rate)}%`,
                   background: parseFloat(s.rate) > 15 ? 'var(--danger)' : 'var(--success)'
-                }} 
+                }}
               />
-            </div>
-            <div className="row space-between small muted" style={{ marginTop: '0.75rem' }}>
-              <span>Total: <strong>{s.total}</strong></span>
-              <span>Em Manutenção: <strong>{s.defeitos}</strong></span>
             </div>
           </section>
         ))}
       </div>
+
+      <style>{`
+        .brand-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+        .brand-stat-card { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; }
+        .card-title { margin: 0; text-transform: capitalize; font-size: 0.95rem; }
+        .badge .label-text { margin-left: 4px; font-weight: 400; opacity: 0.8; }
+        .card-body { display: flex; justify-content: space-between; align-items: center; background: var(--bg-secondary); padding: 0.75rem; border-radius: var(--radius-sm); }
+        .stat-item { display: flex; flex-direction: column; gap: 0.1rem; }
+        .prop-label { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+        .prop-value { font-size: 1rem; font-weight: 700; }
+        .progress-bar-container { height: 4px; background: var(--bg-secondary); border-radius: 2px; overflow: hidden; }
+        .progress-bar-fill { height: 100%; transition: width 0.5s ease; border-radius: 2px; }
+      `}</style>
 
       {/* Ações Rápidas e Dicas */}
       <div className="inner-grid inner-grid-2" style={{ marginTop: '1.5rem', gap: '1.5rem' }}>
@@ -453,6 +479,19 @@ export function Dashboard() {
       </div>
 
       <style>{`
+        .brand-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; }
+        .brand-stat-card { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; }
+        .card-title { margin: 0; text-transform: capitalize; font-size: 0.85rem; }
+        .badge .label-text { margin-left: 4px; font-weight: 400; opacity: 0.8; font-size: 0.65rem; }
+        .badge { padding: 0.2rem 0.5rem; }
+        .card-body { display: flex; justify-content: space-between; align-items: center; background: var(--bg-secondary); padding: 0.5rem 0.75rem; border-radius: var(--radius-sm); }
+        .stat-item { display: flex; flex-direction: column; gap: 0.05rem; }
+        .prop-label { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+        .prop-value { font-size: 1rem; font-weight: 700; }
+        .progress-bar-container { height: 4px; background: var(--bg-secondary); border-radius: 2px; overflow: hidden; }
+        .progress-bar-fill { height: 100%; transition: width 0.5s ease; border-radius: 2px; }
+
         .donut-container {
           position: relative;
           display: flex;
@@ -468,7 +507,7 @@ export function Dashboard() {
           text-align: center;
         }
         .donut-center strong {
-          font-size: 2rem;
+          font-size: 2.5rem;
           font-weight: 800;
           line-height: 1;
         }

@@ -10,12 +10,15 @@ async function ensureSchema() {
   if (schemaEnsured) return;
   await pool.query(`
     ALTER TABLE headsets
-      ADD COLUMN IF NOT EXISTS categoria TEXT NOT NULL DEFAULT 'estoque',
+      ADD COLUMN IF NOT EXISTS categoria TEXT NOT NULL DEFAULT 'operacao',
       ADD COLUMN IF NOT EXISTS nome TEXT NOT NULL DEFAULT '',
       ADD COLUMN IF NOT EXISTS nome_operador TEXT NOT NULL DEFAULT '',
       ADD COLUMN IF NOT EXISTS data_devolucao TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS data_envio_manutencao TIMESTAMPTZ;
   `);
+  // Garantir que registros legados com 'estoque' na categoria sejam migrados (redundante com migration, mas seguro)
+  await pool.query("UPDATE headsets SET categoria = 'operacao' WHERE categoria = 'estoque'");
+  
   await pool.query(`
     ALTER TABLE headsets
       ALTER COLUMN numero_serie DROP NOT NULL;
@@ -57,20 +60,38 @@ function normalizeNumeroSerie(value) {
 
 function normalizePayload(data) {
   let status = String(data?.status ?? "estoque").trim() || "estoque";
-  const categoria = String(data?.categoria ?? "estoque").trim() || "estoque";
+  let categoria = String(data?.categoria ?? "operacao").trim() || "operacao";
   const matricula = String(data?.matricula ?? "").trim();
   const nome_operador = String(data?.nome_operador ?? "").trim();
   
+  // Compatibilidade com valor antigo 'estoque' para categoria
+  if (categoria === "estoque") categoria = "operacao";
+
   // REGRA DE OURO: Consistência de Dados
-  // 1. Se informou matrícula ou nome de operador, o status NÃO PODE ser 'estoque'
-  if ((matricula || nome_operador) && (status === "estoque" || status === "reserva")) {
-    status = "em_uso"; // Força para 'em_uso' se houver operador
+  // 1. Se informou matrícula ou nome de operador, o status NÃO PODE ser 'estoque' ou 'reserva'
+  if (matricula || nome_operador) {
+    if (status === "estoque" || status === "reserva") {
+      // Se for um headset de empréstimo, o status correto é 'emprestimo'
+      // Caso contrário, é um headset de operação comum, status 'em_uso'
+      status = (categoria === "emprestimo") ? "emprestimo" : "em_uso";
+    }
+
+    // Se tem operador vinculado, a finalidade deve ser Operação,
+    // a menos que já tenha sido definido explicitamente como Empréstimo.
+    if (categoria !== "emprestimo") {
+      categoria = "operacao";
+    }
   }
 
-  // 2. Se o status for 'estoque', 'defeito', 'manutencao' ou 'perdido', limpamos o operador por segurança
+  // 2. Se o status for 'estoque', 'reserva', 'defeito', 'manutencao' ou 'perdido', limpamos o operador por segurança
   const statusSemOperador = ["estoque", "reserva", "defeito", "manutencao", "perdido", "furtado"];
   const finalMatricula = statusSemOperador.includes(status) ? "" : matricula;
   const finalNomeOperador = statusSemOperador.includes(status) ? "" : nome_operador;
+
+  // 3. Limpeza de datas temporárias se voltar para estoque
+  const isAvailable = status === "estoque" || status === "reserva";
+  const finalDataDevolucao = isAvailable ? null : (data?.data_devolucao ? new Date(data.data_devolucao) : null);
+  const finalDataEnvioManutencao = status === "manutencao" ? (data?.data_envio_manutencao ? new Date(data.data_envio_manutencao) : new Date()) : (isAvailable ? null : (data?.data_envio_manutencao ? new Date(data.data_envio_manutencao) : null));
 
   return {
     nome: String(data?.nome ?? "").trim(),
@@ -82,21 +103,22 @@ function normalizePayload(data) {
     status,
     categoria,
     observacoes: String(data?.observacoes ?? "").trim(),
-    data_devolucao: data?.data_devolucao ? new Date(data.data_devolucao) : null,
-    data_envio_manutencao: data?.data_envio_manutencao ? new Date(data.data_envio_manutencao) : null,
+    data_devolucao: finalDataDevolucao,
+    data_envio_manutencao: finalDataEnvioManutencao,
   };
 }
 
-async function addHistoryEntry(client, headsetId, acao, campo, valorAnterior, valorNovo, observacao = "") {
-  await client.query(
+export async function addHistoryEntry(client, headsetId, acao, campo, valorAnterior, valorNovo, observacao = "") {
+  const poolClient = client || pool;
+  await poolClient.query(
     `INSERT INTO headset_historico (headset_id, acao, campo, valor_anterior, valor_novo, observacao)
      VALUES ($1, $2, $3, $4, $5, $6)`,
     [
       headsetId,
       acao,
       campo,
-      valorAnterior == null ? null : String(valorAnterior),
-      valorNovo == null ? null : String(valorNovo),
+      valorAnterior == null || valorAnterior === "" ? null : String(valorAnterior),
+      valorNovo == null || valorNovo === "" ? null : String(valorNovo),
       observacao,
     ]
   );
@@ -108,6 +130,7 @@ export async function getHeadsets() {
   const result = await pool.query(
     `SELECT id, nome, nome_operador, matricula, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, data_envio_manutencao, created_at, updated_at
      FROM headsets
+     WHERE deleted_at IS NULL
      ORDER BY updated_at DESC`
   );
   return result.rows;
@@ -197,7 +220,10 @@ export async function updateHeadset(id, data) {
 
     const tracked = ["nome", "nome_operador", "matricula", "lacre", "marca", "numero_serie", "status", "categoria", "observacoes", "data_devolucao", "data_envio_manutencao"];
     for (const field of tracked) {
-      if ((current[field] ?? null) !== (updated[field] ?? null)) {
+      const v1 = current[field] instanceof Date ? current[field].getTime() : (current[field] ?? null);
+      const v2 = updated[field] instanceof Date ? updated[field].getTime() : (updated[field] ?? null);
+
+      if (v1 !== v2) {
         await addHistoryEntry(
           client,
           id,
@@ -277,20 +303,22 @@ export async function swapHeadset(idOriginal, idNovo, novoStatusOriginal, observ
 
     // 3. Atualiza o original (vai para defeito, perdido ou furtado e perde a matrícula)
     await client.query(
-      `UPDATE headsets SET status = $1, matricula = '', nome_operador = '', updated_at = NOW() WHERE id = $2`,
+      `UPDATE headsets SET status = $1, matricula = '', nome_operador = '', data_devolucao = NULL, updated_at = NOW() WHERE id = $2`,
       [novoStatusOriginal, idOriginal]
     );
     await addHistoryEntry(client, idOriginal, "troca_saida", "status", original.status, novoStatusOriginal, observacao);
     await addHistoryEntry(client, idOriginal, "troca_saida", "matricula", original.matricula, "", "Troca realizada");
+    await addHistoryEntry(client, idOriginal, "troca_saida", "nome_operador", original.nome_operador, "", "Troca realizada");
 
     // 4. Atualiza o novo (recebe a matrícula do operador e muda status para o mesmo do original antes da troca)
     const novoStatusNovo = original.status === 'emprestimo' ? 'emprestimo' : 'em_uso';
 
     await client.query(
-      `UPDATE headsets SET matricula = $1, nome_operador = $2, status = $3, updated_at = NOW() WHERE id = $4`,
-      [matricula, nomeOperador, novoStatusNovo, idNovo]
+      `UPDATE headsets SET matricula = $1, nome_operador = $2, status = $3, data_devolucao = $4, updated_at = NOW() WHERE id = $5`,
+      [matricula, nomeOperador, novoStatusNovo, original.data_devolucao, idNovo]
     );
     await addHistoryEntry(client, idNovo, "troca_entrada", "matricula", "", matricula, `Substituindo o lacre ${original.lacre}`);
+    await addHistoryEntry(client, idNovo, "troca_entrada", "nome_operador", "", nomeOperador, "Troca realizada");
     await addHistoryEntry(client, idNovo, "troca_entrada", "status", novo.status, novoStatusNovo, "Troca realizada");
 
     await client.query("COMMIT");
@@ -310,7 +338,7 @@ export async function desligamentoPorMatricula(matricula, observacao = "") {
 
     // Busca todos os headsets vinculados a essa matrícula
     const res = await client.query(
-      `SELECT id, status, nome_operador, lacre FROM headsets WHERE matricula = $1`,
+      `SELECT * FROM headsets WHERE matricula = $1`,
       [matricula]
     );
     
@@ -327,20 +355,16 @@ export async function desligamentoPorMatricula(matricula, observacao = "") {
           status = 'estoque', 
           matricula = '', 
           nome_operador = '', 
+          data_devolucao = NULL,
+          data_envio_manutencao = NULL,
           updated_at = NOW() 
         WHERE id = $1`,
         [h.id]
       );
 
-      await addHistoryEntry(
-        client, 
-        h.id, 
-        "desligamento", 
-        "status", 
-        h.status, 
-        "estoque", 
-        logBase
-      );
+      await addHistoryEntry(client, h.id, "desligamento", "status", h.status, "estoque", logBase);
+      await addHistoryEntry(client, h.id, "desligamento", "matricula", h.matricula, "", logBase);
+      await addHistoryEntry(client, h.id, "desligamento", "nome_operador", h.nome_operador, "", logBase);
     }
 
     await client.query("COMMIT");
@@ -378,11 +402,33 @@ export async function getGlobalHistorico(limit = 10) {
   return result.rows;
 }
 
-/** Apaga uma linha; rowCount diz se algo foi removido. */
+/** Apaga uma linha de forma lógica; rowCount diz se algo foi removido. */
 export async function deleteHeadset(id) {
   await ensureSchema();
-  const result = await pool.query(`DELETE FROM headsets WHERE id = $1`, [id]);
-  return result.rowCount > 0;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    
+    // 1. Pega o lacre para o log
+    const hsRes = await client.query(`SELECT lacre FROM headsets WHERE id = $1`, [id]);
+    const hs = hsRes.rows[0];
+    
+    if (hs) {
+      // 2. Registra na auditoria ANTES de marcar como deletado
+      await addHistoryEntry(client, id, "exclusao", "headset", hs.lacre, null, "Registro excluído (soft-delete)");
+      
+      // 3. Soft delete (marca com a data atual)
+      await client.query(`UPDATE headsets SET deleted_at = NOW() WHERE id = $1`, [id]);
+    }
+
+    await client.query("COMMIT");
+    return !!hs;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function updateBatch(ids, data) {
@@ -402,7 +448,7 @@ export async function updateBatch(ids, data) {
 
     for (const id of ids) {
       // Busca atual para log de histórico
-      const currentRes = await client.query(`SELECT status, categoria, observacoes, matricula, nome_operador, data_envio_manutencao FROM headsets WHERE id = $1`, [id]);
+      const currentRes = await client.query(`SELECT * FROM headsets WHERE id = $1`, [id]);
       if (currentRes.rowCount === 0) continue;
       const current = currentRes.rows[0];
 
@@ -410,18 +456,26 @@ export async function updateBatch(ids, data) {
       const nextMatricula = isReturningToStock ? "" : current.matricula;
       const nextNomeOperador = isReturningToStock ? "" : current.nome_operador;
       const nextMaintDate = isSendingToMaint ? (current.data_envio_manutencao || new Date()) : (isReturningToStock ? null : current.data_envio_manutencao);
+      const nextLoanDate = isReturningToStock ? null : current.data_devolucao;
+      
       const nextObs = observacoesAdd 
         ? (current.observacoes ? `${current.observacoes}\n${observacoesAdd}` : observacoesAdd)
         : current.observacoes;
 
       await client.query(
-        `UPDATE headsets SET status = $1, observacoes = $2, matricula = $3, nome_operador = $4, data_envio_manutencao = $5, updated_at = NOW() WHERE id = $6`,
-        [nextStatus, nextObs, nextMatricula, nextNomeOperador, nextMaintDate, id]
+        `UPDATE headsets SET status = $1, observacoes = $2, matricula = $3, nome_operador = $4, data_envio_manutencao = $5, data_devolucao = $6, updated_at = NOW() WHERE id = $7`,
+        [nextStatus, nextObs, nextMatricula, nextNomeOperador, nextMaintDate, nextLoanDate, id]
       );
 
-      // Loga mudança de status se houver
+      // Loga mudanças importantes
       if (status && status !== current.status) {
         await addHistoryEntry(client, id, "atualizacao_lote", "status", current.status, status, "Atualização em lote");
+      }
+      if (nextMatricula !== current.matricula) {
+        await addHistoryEntry(client, id, "atualizacao_lote", "matricula", current.matricula, nextMatricula, "Atualização em lote");
+      }
+      if (nextNomeOperador !== current.nome_operador) {
+        await addHistoryEntry(client, id, "atualizacao_lote", "nome_operador", current.nome_operador, nextNomeOperador, "Atualização em lote");
       }
       
       count++;

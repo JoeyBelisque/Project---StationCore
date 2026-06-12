@@ -19,6 +19,17 @@ export async function atualizarComputador(id, body) {
   })
 }
 
+export async function trocarComputador(idOriginal, body) {
+  return fetchJson(`/computadores/${encodeURIComponent(idOriginal)}/troca`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function listarHistoricoComputador(id) {
+  return fetchJson(`/computadores/${encodeURIComponent(id)}/historico`)
+}
+
 export async function removerComputador(id) {
   return fetchJson(`/computadores/${encodeURIComponent(id)}`, {
     method: 'DELETE',

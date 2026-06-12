@@ -24,12 +24,12 @@ export async function login(req, res) {
 
   const usuario = await findUsuarioByEmail(email);
   if (!usuario || !usuario.ativo) {
-    return res.status(401).json({ erro: "Credenciais inválidas." });
+    return res.status(401).json({ error: "Credenciais inválidas." });
   }
 
   const ok = await bcrypt.compare(senha, usuario.senha_hash);
   if (!ok) {
-    return res.status(401).json({ erro: "Credenciais inválidas." });
+    return res.status(401).json({ error: "Credenciais inválidas." });
   }
 
   const userPayload = sanitizeUser(usuario);

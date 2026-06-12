@@ -149,7 +149,10 @@ export const historico = async (req, res, next) => {
 
 export const remover = async (req, res, next) => {
   try {
-    const ok = await Headset.deleteHeadset(req.params.id);
+    const { id } = req.params;
+    // Log before soft-delete
+    await Headset.addHistoryEntry(null, id, "exclusao", "headset", "ativo", "excluido", "Remoção lógica realizada");
+    const ok = await Headset.deleteHeadset(id);
     if (!ok) {
       res.status(404).json({ error: "headset não encontrado" });
       return;

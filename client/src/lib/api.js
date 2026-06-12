@@ -49,8 +49,18 @@ export async function fetchJson(path, options = {}) {
         window.location.href = '/login'
       }
     }
-    const text = await res.text()
-    throw new Error(text || `HTTP ${res.status}`)
+    
+    // Tenta extrair a mensagem de erro do JSON
+    let errorMessage = `Erro ${res.status}`
+    try {
+      const data = await res.json()
+      errorMessage = data.error || data.erro || data.message || errorMessage
+    } catch {
+      const text = await res.text()
+      if (text) errorMessage = text
+    }
+    
+    throw new Error(errorMessage)
   }
   if (res.status === 204) return null
   return res.json()

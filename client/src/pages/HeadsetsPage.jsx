@@ -49,7 +49,7 @@ import {
 const PAGE_SIZE = 20
 
 const CATEGORIA_LABELS = {
-  estoque: 'Operação',
+  operacao: 'Operação',
   emprestimo: 'Empréstimo',
 }
 
@@ -79,7 +79,7 @@ function mapRow(r) {
     marca: r.marca ?? '',
     numeroSerie: r.numero_serie ?? '',
     status: r.status,
-    categoria: r.categoria ?? 'estoque',
+    categoria: r.categoria === 'estoque' ? 'operacao' : (r.categoria ?? 'operacao'),
     observacoes: r.observacoes ?? '',
     dataDevolucao: r.data_devolucao,
     dataEnvioManutencao: r.data_envio_manutencao,
@@ -97,7 +97,7 @@ const emptyForm = () => ({
   marca: '',
   numeroSerie: '',
   status: 'estoque',
-  categoria: 'estoque',
+  categoria: 'operacao',
   observacoes: '',
 })
 
@@ -111,27 +111,41 @@ export function HeadsetsPage() {
   const [error, setError] = useState(null)
   const [q, setQ] = useState('')
   
-  const [statusFilter, setStatusFilter] = useState(() => 
-    searchParams.get('status') || localStorage.getItem('hs_filter_status') || ''
-  )
-  const [categoriaFilter, setCategoriaFilter] = useState(() => 
-    searchParams.get('categoria') || localStorage.getItem('hs_filter_categoria') || ''
-  )
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || '')
+  const [categoriaFilter, setCategoriaFilter] = useState(() => searchParams.get('categoria') || '')
   
   const [viewMode, setViewMode] = useState('inventario')
   const [isCompact, setIsCompact] = useState(() => localStorage.getItem('hs_compact') === 'true')
   const [page, setPage] = useState(0)
   const [modal, setModal] = useState(null)
 
+  // Função central para atualizar a URL e manter o histórico do navegador sincronizado
+  const updateParams = useCallback((newStatus, newCat) => {
+    const next = new URLSearchParams(searchParams)
+    if (newStatus !== undefined) {
+      if (newStatus) next.set('status', newStatus)
+      else next.delete('status')
+    }
+    if (newCat !== undefined) {
+      if (newCat) next.set('categoria', newCat)
+      else next.delete('categoria')
+    }
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  // Sincroniza filtros locais com a URL sempre que o endereço mudar (via Sidebar ou Abas)
+  // Isso garante que a "verdade" sobre o estado da página venha sempre da URL.
+  useEffect(() => {
+    setStatusFilter(searchParams.get('status') || '')
+    setCategoriaFilter(searchParams.get('categoria') || '')
+    setPage(0) // Reseta a paginação ao trocar de categoria para evitar páginas vazias
+  }, [searchParams])
+
   useEffect(() => {
     localStorage.setItem('hs_compact', isCompact)
   }, [isCompact])
 
-  useEffect(() => {
-    localStorage.setItem('hs_filter_status', statusFilter)
-    localStorage.setItem('hs_filter_categoria', categoriaFilter)
-  }, [statusFilter, categoriaFilter])
-
+  // Identifica equipamentos que podem ser usados para substituição imediata
   const disponiveisParaTroca = useMemo(() => {
     return items.filter(h => h.status === 'estoque' || h.status === 'reserva')
   }, [items])
@@ -141,6 +155,7 @@ export function HeadsetsPage() {
     setError(null)
     try {
       const data = await listarHeadsets()
+      // Normaliza os dados vindos do banco para o padrão usado no componente (camelCase)
       setItems(Array.isArray(data) ? data.map(mapRow) : [])
       setSelectedIds(new Set())
     } catch (e) {
@@ -153,26 +168,30 @@ export function HeadsetsPage() {
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    const next = new URLSearchParams(searchParams)
-    if (statusFilter) next.set('status', statusFilter)
-    else next.delete('status')
-    if (categoriaFilter) next.set('categoria', categoriaFilter)
-    else next.delete('categoria')
-    setSearchParams(next, { replace: true })
-  }, [statusFilter, categoriaFilter, searchParams, setSearchParams])
-
+  // Lógica de filtragem central: combina Busca Global + Status + Categoria
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
     return items.filter((h) => {
       if (statusFilter && String(h.status) !== statusFilter) return false
       if (categoriaFilter && String(h.categoria) !== categoriaFilter) return false
       if (!s) return true
+      // O 'blob' permite busca por qualquer campo em uma única string
       const blob = `${h.nome} ${h.nomeOperador} ${h.matricula} ${h.lacre} ${h.marca} ${h.numeroSerie} ${h.categoria} ${labelByValue(HEADSET_STATUS, h.status)}`.toLowerCase()
       return blob.includes(s)
     })
   }, [items, q, statusFilter, categoriaFilter])
 
+  /**
+   * Título Dinâmico: Melhora a orientação do usuário.
+   * Em vez de apenas "Headsets", indica o contexto atual.
+   */
+  const pageTitle = useMemo(() => {
+    if (categoriaFilter === 'operacao') return 'Headsets > Operação'
+    if (categoriaFilter === 'emprestimo') return 'Headsets > Empréstimos'
+    return 'Headsets'
+  }, [categoriaFilter])
+
+  // Filtra apenas registros com vínculos ativos (usado no botão de alternância de visão)
   const visibleRows = useMemo(() => {
     if (viewMode === 'inventario') return filtered
     return filtered.filter((h) => (h.matricula || h.nomeOperador) && (h.status === 'em_uso' || h.status === 'emprestimo'))
@@ -468,7 +487,7 @@ export function HeadsetsPage() {
     <div className="page-fade-in">
       <header className="page-header-premium" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
         <div>
-          <h2 className="page-title">Headsets</h2>
+          <h2 className="page-title">{pageTitle}</h2>
           <p className="page-subtitle" style={{ marginBottom: 0 }}>Gestão de inventário e atribuição de equipamentos.</p>
         </div>
         <div className="row gap">
@@ -479,22 +498,33 @@ export function HeadsetsPage() {
         </div>
       </header>
 
-      {/* SELETOR DE DESTINAÇÃO NO TOPO */}
-      <div className="segmented-control" style={{ marginBottom: '1.5rem', maxWidth: '450px' }}>
-        <button className={`segment ${categoriaFilter === '' ? 'active' : ''}`} onClick={() => setCategoriaFilter('')}>
-          <Layers size={14} /> Todos
-        </button>
-        <button className={`segment ${categoriaFilter === 'estoque' ? 'active' : ''}`} onClick={() => setCategoriaFilter('estoque')}>
-          <Package size={14} /> Operação
-        </button>
-        <button className={`segment ${categoriaFilter === 'emprestimo' ? 'active' : ''}`} onClick={() => setCategoriaFilter('emprestimo')}>
-          <Calendar size={14} /> Empréstimos
-        </button>
-      </div>
-
+      {/* ABAS DE CONTEXTO (Simplificação de Fluxo) */}
       <div className="segmented-control" style={{ marginBottom: '1.5rem', width: 'fit-content' }}>
-        <button className={`segment ${viewMode === 'inventario' ? 'active' : ''}`} onClick={() => setViewMode('inventario')}>Visão Geral</button>
-        <button className={`segment ${viewMode === 'vinculos' ? 'active' : ''}`} onClick={() => setViewMode('vinculos')}>Vínculos Ativos</button>
+        {/* Caso: Empréstimos */}
+        {categoriaFilter === 'emprestimo' && (
+          <>
+            <button className={`segment ${statusFilter === '' ? 'active' : ''}`} onClick={() => updateParams('', undefined)}>Todos</button>
+            <button className={`segment ${statusFilter === 'estoque' ? 'active' : ''}`} onClick={() => updateParams('estoque', undefined)}>Disponíveis</button>
+            <button className={`segment ${statusFilter === 'emprestimo' ? 'active' : ''}`} onClick={() => updateParams('emprestimo', undefined)}>Emprestados</button>
+          </>
+        )}
+
+        {/* Caso: Operação */}
+        {categoriaFilter === 'operacao' && (
+          <>
+            <button className={`segment ${statusFilter === '' ? 'active' : ''}`} onClick={() => updateParams('', undefined)}>Todos</button>
+            <button className={`segment ${statusFilter === 'em_uso' ? 'active' : ''}`} onClick={() => updateParams('em_uso', undefined)}>Em Uso</button>
+            <button className={`segment ${statusFilter === 'estoque' ? 'active' : ''}`} onClick={() => updateParams('estoque', undefined)}>No Estoque</button>
+          </>
+        )}
+
+        {/* Caso: Visão Geral (Sem categoria fixa) */}
+        {!categoriaFilter && (
+          <>
+            <button className={`segment ${viewMode === 'inventario' ? 'active' : ''}`} onClick={() => { setViewMode('inventario'); updateParams('', undefined); }}>Visão Geral</button>
+            <button className={`segment ${viewMode === 'vinculos' ? 'active' : ''}`} onClick={() => { setViewMode('vinculos'); updateParams('', undefined); }}>Vínculos Ativos</button>
+          </>
+        )}
       </div>
 
       <div className="card toolbar-premium">
@@ -503,11 +533,14 @@ export function HeadsetsPage() {
           <input type="search" className="input w-full" placeholder="Buscar por nome, lacre, série ou operador..." value={q} onChange={e => setQ(e.target.value)} />
         </div>
         <div className="row gap wrap">
-          <select className="input" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="">Condição (Todos)</option>
-            {HEADSET_STATUS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <button className="btn btn-secondary btn-icon" onClick={() => { setStatusFilter(''); setCategoriaFilter(''); setQ(''); }} title="Limpar Filtros">
+          {/* Só mostra o select de status na visão geral, pois nas outras as abas já resolvem */}
+          {!categoriaFilter && (
+            <select className="input" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="">Condição (Todos)</option>
+              {HEADSET_STATUS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          )}
+          <button className="btn btn-secondary btn-icon" onClick={() => { setQ(''); setStatusFilter(''); }} title="Limpar Busca">
             <XCircle size={18} />
           </button>
         </div>
@@ -609,51 +642,70 @@ export function HeadsetsPage() {
       {/* Modal: Visualizar Detalhes */}
       {modal?.mode === 'view' && (
         <Modal 
-          title={`Ficha: ${modal.headset.lacre}`} 
+          title={`Detalhes: ${modal.headset.lacre}`} 
           onClose={() => setModal(null)}
           size="md"
-          footer={<button className="btn btn-secondary" onClick={() => setModal(null)}>Fechar Consulta</button>}
+          icon={Tag}
+          footer={<button className="btn btn-secondary" onClick={() => setModal(null)}>Fechar</button>}
         >
-          <div className="detail-grid-premium">
-            <div className="detail-section full" style={{ textAlign: 'center', padding: '1.5rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
-              <span className="prop-label" style={{ marginBottom: '0.5rem' }}>Estado Atual do Ativo</span>
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
-                <span className={getBadgeClass(modal.headset.status)} style={{ fontSize: '1rem', padding: '0.5rem 1.25rem' }}>
-                  {labelByValue(HEADSET_STATUS, modal.headset.status)}
-                </span>
+          <div className="modal-view-container">
+            {/* Header: Status Integrado e Simétrico */}
+            <div className="modal-header-status">
+              <span className="prop-label">Situação Atual</span>
+              <span className={`status-pill ${getBadgeClass(modal.headset.status)}`}>
+                {labelByValue(HEADSET_STATUS, modal.headset.status)}
+              </span>
+            </div>
+
+            {/* Grid de Dados: Simétrico e Uniforme (Lacre primeiro) */}
+            <div className="modal-data-grid">
+              <div className="data-card">
+                <span className="prop-label">Lacre</span>
+                <p className="prop-value mono" style={{ color: 'var(--accent-light)' }}>{modal.headset.lacre}</p>
               </div>
-              <h3 className="text-accent" style={{ fontSize: '1.5rem' }}>{modal.headset.nome || 'Headset'}</h3>
-              <p className="small muted">Destinado a: {modal.headset.categoria === 'emprestimo' ? 'Empréstimo' : 'Operação'}</p>
-            </div>
-
-            <div className="detail-section">
-              <h5 className="section-title" style={{ fontSize: '0.9rem' }}><Tag size={16} /> Dados Técnicos</h5>
-              <div className="prop-row"><span className="prop-label">Lacre</span><p className="prop-value mono"><strong>{modal.headset.lacre}</strong></p></div>
-              <div className="prop-row"><span className="prop-label">Marca</span><p className="prop-value" style={{ textTransform: 'capitalize' }}>{modal.headset.marca || '—'}</p></div>
-              <div className="prop-row"><span className="prop-label">Número de Série</span><p className="prop-value mono small">{modal.headset.numeroSerie || '—'}</p></div>
-            </div>
-
-            <div className="detail-section">
-              <h5 className="section-title" style={{ fontSize: '0.9rem' }}><UserIcon size={16} /> Vínculo Operacional</h5>
-              <div className="prop-row"><span className="prop-label">Operador</span><p className="prop-value"><strong>{modal.headset.nomeOperador || 'Equipamento Disponível'}</strong></p></div>
-              <div className="prop-row"><span className="prop-label">Matrícula</span><p className="prop-value">{modal.headset.matricula || '—'}</p></div>
-              {(modal.headset.dataDevolucao || modal.headset.dataEnvioManutencao) && (
-                <div className="prop-row">
-                  <span className="prop-label">{modal.headset.status === 'emprestimo' ? 'Prazo de Devolução' : 'Enviado p/ Reparo'}</span>
-                  <p className={`prop-value ${modal.headset.status === 'emprestimo' ? 'text-warning' : 'text-info'}`}>
-                    <strong>{new Date(modal.headset.dataDevolucao || modal.headset.dataEnvioManutencao).toLocaleDateString('pt-BR')}</strong>
-                  </p>
+              {modal.headset.nome && (
+                <div className="data-card">
+                  <span className="prop-label">Equipamento (Nome)</span>
+                  <p className="prop-value">{modal.headset.nome}</p>
                 </div>
               )}
+              <div className="data-card">
+                <span className="prop-label">Marca</span>
+                <p className="prop-value">{modal.headset.marca || '—'}</p>
+              </div>
+              <div className="data-card">
+                <span className="prop-label">Série</span>
+                <p className="prop-value mono">{modal.headset.numeroSerie || '—'}</p>
+              </div>
             </div>
 
-            <div className="detail-section full">
-              <span className="prop-label">Observações Técnicas</span>
-              <div style={{ padding: '1rem', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', minHeight: '80px' }}>
-                <p className="small muted" style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{modal.headset.observacoes || 'Sem notas adicionais.'}</p>
+            {/* Vínculo: Layout de Card Simétrico */}
+            <div className="modal-vinc-card">
+              <h5 className="section-title"><UserIcon size={16} /> Detalhes do Vínculo</h5>
+              <div className="modal-data-grid">
+                <div className="data-card">
+                  <span className="prop-label">Operador</span>
+                  <p className="prop-value">{modal.headset.nomeOperador || 'Disponível'}</p>
+                </div>
+                <div className="data-card">
+                  <span className="prop-label">Matrícula</span>
+                  <p className="prop-value">{modal.headset.matricula || '—'}</p>
+                </div>
               </div>
             </div>
           </div>
+
+          <style>{`
+            .modal-view-container { display: flex; flex-direction: column; gap: 1.25rem; padding: 0.5rem; }
+            .modal-header-status { display: flex; flex-direction: column; align-items: center; padding: 1.25rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border); gap: 0.5rem; }
+            .status-pill { padding: 0.4rem 1rem; border-radius: 999px; font-weight: 700; font-size: 0.85rem; }
+            .modal-data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+            .data-card { background: var(--surface-hover); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border); }
+            .modal-vinc-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; background: var(--surface); display: flex; flex-direction: column; gap: 1rem; }
+            .section-title { font-size: 0.8rem; margin: 0; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.5rem; }
+            .prop-label { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.25rem; display: block; }
+            .prop-value { font-size: 1rem; font-weight: 600; color: var(--text); margin: 0; }
+          `}</style>
         </Modal>
       )}
 
@@ -662,84 +714,139 @@ export function HeadsetsPage() {
         <Modal title={modal.form.id ? 'Editar Equipamento' : 'Novo Cadastro'} onClose={() => setModal(null)} footer={<><button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button><button type="submit" form="f-hs" className="btn btn-primary">Salvar</button></>}>
           <form id="f-hs" className="form-grid" onSubmit={handleSubmit}>
             <div className="full" style={{ marginBottom: '1rem' }}>
-              <label style={{ marginBottom: '0.5rem' }}>Destinação do Equipamento</label>
+              <label className="form-label">Destinação do Equipamento</label>
               <div className="segmented-control" style={{ background: 'var(--bg)' }}>
-                <button type="button" className={`segment ${modal.form.categoria === 'estoque' ? 'active' : ''}`} onClick={() => setModal(m => ({...m, form: {...m.form, categoria: 'estoque'}}))}>Operação Comum</button>
+                <button type="button" className={`segment ${modal.form.categoria === 'operacao' ? 'active' : ''}`} onClick={() => setModal(m => ({...m, form: {...m.form, categoria: 'operacao'}}))}>Operação Comum</button>
                 <button type="button" className={`segment ${modal.form.categoria === 'emprestimo' ? 'active' : ''}`} onClick={() => setModal(m => ({...m, form: {...m.form, categoria: 'emprestimo'}}))}>Equipamento de Empréstimo</button>
               </div>
             </div>
 
-            <label className="full">Identificador / Nome<input className="input" value={modal.form.nome} onChange={e => setModal(m => ({...m, form: {...m.form, nome: e.target.value}}))} placeholder="Ex: Headset Reserva 01" /></label>
-            <label>Matrícula<input className="input" value={modal.form.matricula} onChange={e => setModal(m => ({...m, form: {...m.form, matricula: e.target.value}}))} /></label>
-            <label>Nome Operador<input className="input" value={modal.form.nomeOperador} onChange={e => setModal(m => ({...m, form: {...m.form, nomeOperador: e.target.value}}))} /></label>
-            <label>Lacre<input className="input mono" value={modal.form.lacre} onChange={e => setModal(m => ({...m, form: {...m.form, lacre: e.target.value}}))} required /></label>
-            <label>Marca<select className="input" value={modal.form.marca} onChange={e => setModal(m => ({...m, form: {...m.form, marca: e.target.value}}))}><option value="">Selecione</option><option value="intelbras">Intelbras</option><option value="plantronics">Plantronics</option></select></label>
-            <label>Série<input className="input mono" value={modal.form.numeroSerie} onChange={e => setModal(m => ({...m, form: {...m.form, numeroSerie: e.target.value}}))} /></label>
-            <label className="full">Status Atual<select className="input" value={modal.form.status} onChange={e => setModal(m => ({...m, form: {...m.form, status: e.target.value}}))}>{HEADSET_STATUS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
-            <label className="full">Observações<textarea className="input" rows={3} value={modal.form.observacoes} onChange={e => setModal(m => ({...m, form: {...m.form, observacoes: e.target.value}}))} /></label>
+            <label className="full">
+              <span className="form-label">Identificador / Nome (Opcional)</span>
+              <input className="input" value={modal.form.nome} onChange={e => setModal(m => ({...m, form: {...m.form, nome: e.target.value}}))} placeholder="Ex: Headset Reserva 01" />
+            </label>
+            <label>
+              <span className="form-label">Matrícula</span>
+              <input className="input" value={modal.form.matricula} onChange={e => setModal(m => ({...m, form: {...m.form, matricula: e.target.value}}))} />
+            </label>
+            <label>
+              <span className="form-label">Nome Operador</span>
+              <input className="input" value={modal.form.nomeOperador} onChange={e => setModal(m => ({...m, form: {...m.form, nomeOperador: e.target.value}}))} />
+            </label>
+            <label>
+              <span className="form-label">Lacre</span>
+              <input className="input mono" value={modal.form.lacre} onChange={e => setModal(m => ({...m, form: {...m.form, lacre: e.target.value}}))} required />
+            </label>
+            <label>
+              <span className="form-label">Marca</span>
+              <select className="input" value={modal.form.marca} onChange={e => setModal(m => ({...m, form: {...m.form, marca: e.target.value}}))}><option value="">Selecione</option><option value="intelbras">Intelbras</option><option value="plantronics">Plantronics</option></select>
+            </label>
+            <label>
+              <span className="form-label">Série</span>
+              <input className="input mono" value={modal.form.numeroSerie} onChange={e => setModal(m => ({...m, form: {...m.form, numeroSerie: e.target.value}}))} />
+            </label>
+            <label className="full">
+              <span className="form-label">Status Atual</span>
+              <select className="input" value={modal.form.status} onChange={e => setModal(m => ({...m, form: {...m.form, status: e.target.value}}))}>{HEADSET_STATUS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+            </label>
+            <label className="full">
+              <span className="form-label">Observações</span>
+              <textarea className="input" rows={3} value={modal.form.observacoes} onChange={e => setModal(m => ({...m, form: {...m.form, observacoes: e.target.value}}))} />
+            </label>
           </form>
         </Modal>
       )}
 
+      <style>{`
+        .form-label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .full { grid-column: 1 / -1; }
+        /* ... existing styles ... */
+      `}</style>
+
       {/* Modal: Gestão de Ações */}
       {modal?.mode === 'acoes' && (
         <Modal title={`Gestão: ${modal.headset.lacre}`} size="sm" onClose={() => setModal(null)}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <button className="btn btn-secondary w-full" onClick={() => openEdit(modal.headset)}><FileText size={16} /> Editar Cadastro</button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             
-            {(modal.headset.status === 'em_uso' || modal.headset.status === 'emprestimo') ? (
-              <>
-                <button className="btn btn-primary w-full" style={{ background: 'var(--warning)', borderColor: 'var(--warning)' }} onClick={() => openTroca(modal.headset)}>
-                  <RefreshCcw size={16} /> Substituir Headset
-                </button>
-                <button 
-                  className="btn w-full" 
-                  style={{ 
-                    background: modal.headset.status === 'emprestimo' ? 'rgba(16, 185, 129, 0.1)' : 'var(--surface-hover)', 
-                    color: modal.headset.status === 'emprestimo' ? 'var(--success)' : 'var(--text)',
-                    border: modal.headset.status === 'emprestimo' ? '1px solid var(--success)' : '1px solid var(--border)'
-                  }} 
-                  onClick={() => openBaixa(modal.headset)}
-                >
-                  {modal.headset.status === 'emprestimo' ? <ArrowDownLeft size={16} /> : <UserMinus size={16} />} 
-                  <strong>{modal.headset.status === 'emprestimo' ? 'Encerrar Empréstimo (Baixa)' : 'Dar Baixa (Recolher)'}</strong>
-                </button>
-              </>
-            ) : (
-              (modal.headset.status === 'estoque' || modal.headset.status === 'reserva') && (
-                <>
-                  <button className="btn btn-primary w-full" onClick={() => openVincular(modal.headset)}><UserPlus size={16} /> Vincular Operador</button>
-                  <button className="btn btn-secondary w-full" style={{ border: '1px solid var(--accent)' }} onClick={() => openEmprestimo(modal.headset)}><Calendar size={16} /> Registrar Empréstimo</button>
-                </>
-              )
-            )}
+            {/* Grupo: Vínculo e Operação */}
+            <div className="action-group">
+              <span className="action-group-label">Vínculo e Movimentação</span>
+              <div className="action-group-content">
+                {(modal.headset.status === 'em_uso' || modal.headset.status === 'emprestimo') ? (
+                  <>
+                    <button className="btn btn-primary w-full" style={{ background: 'var(--warning)', borderColor: 'var(--warning)' }} onClick={() => openTroca(modal.headset)}>
+                      <RefreshCcw size={16} /> Substituir Headset
+                    </button>
+                    <button 
+                      className="btn w-full action-btn-highlight" 
+                      style={{ 
+                        background: modal.headset.status === 'emprestimo' ? 'rgba(16, 185, 129, 0.1)' : 'var(--surface-hover)', 
+                        color: modal.headset.status === 'emprestimo' ? 'var(--success)' : 'var(--text)',
+                        borderColor: modal.headset.status === 'emprestimo' ? 'var(--success)' : 'var(--border)'
+                      }} 
+                      onClick={() => openBaixa(modal.headset)}
+                    >
+                      {modal.headset.status === 'emprestimo' ? <ArrowDownLeft size={16} /> : <UserMinus size={16} />} 
+                      <span>{modal.headset.status === 'emprestimo' ? 'Encerrar Empréstimo' : 'Dar Baixa (Recolher)'}</span>
+                    </button>
+                  </>
+                ) : (
+                  (modal.headset.status === 'estoque' || modal.headset.status === 'reserva') && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <button className="btn btn-primary w-full" onClick={() => openVincular(modal.headset)}><UserPlus size={16} /> Vincular Operador</button>
+                      <button className="btn btn-secondary w-full" style={{ border: '1px solid var(--accent)' }} onClick={() => openEmprestimo(modal.headset)}><Calendar size={16} /> Registrar Empréstimo</button>
+                    </div>
+                  )
+                )}
 
-            {/* C. Bloqueio de Segurança: Ação de vincular bloqueada se estiver com defeito ou manutenção */}
-            {!(modal.headset.status === 'em_uso' || modal.headset.status === 'emprestimo' || modal.headset.status === 'estoque' || modal.headset.status === 'reserva') && (
-              <div className="badge badge-danger" style={{ padding: '0.75rem', justifyContent: 'center', gap: 8 }}>
-                <AlertTriangle size={14} /> Equipamento indisponível para vínculo
+                {/* Bloqueio de Segurança */}
+                {!(modal.headset.status === 'em_uso' || modal.headset.status === 'emprestimo' || modal.headset.status === 'estoque' || modal.headset.status === 'reserva') && (
+                  <div className="badge badge-danger" style={{ padding: '0.75rem', justifyContent: 'center', gap: 8, width: '100%' }}>
+                    <AlertTriangle size={14} /> Equipamento indisponível para vínculo
+                  </div>
+                )}
               </div>
-            )}
-
-            {!(modal.headset.status === 'em_uso' || modal.headset.status === 'emprestimo') && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                <button className="btn btn-secondary btn-small text-danger" onClick={() => handleStatusRapido(modal.headset, 'defeito')} title="Marcar como Defeito">
-                  <AlertTriangle size={14} /> Defeito
-                </button>
-                <button className="btn btn-secondary btn-small text-danger" onClick={() => handleStatusRapido(modal.headset, 'perdido')} title="Marcar como Extravio">
-                  <XCircle size={14} /> Extravio
-                </button>
-              </div>
-            )}
-
-            {modal.headset.status === 'defeito' && <button className="btn btn-primary w-full" style={{ background: 'var(--accent)' }} onClick={() => handleStatusRapido(modal.headset, 'manutencao')}><Wrench size={16} /> Enviar Manutenção</button>}
-            {modal.headset.status === 'manutencao' && <button className="btn btn-primary w-full" style={{ background: 'var(--success)' }} onClick={() => openRetornoManutencao(modal.headset)}><CheckCircle size={16} /> Registrar Retorno</button>}
-
-            <div style={{ borderTop: '1px solid var(--border)', marginTop: '0.5rem', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <button className="btn btn-secondary w-full" onClick={() => openTrocaLacre(modal.headset)}><RotateCcw size={16} /> Atualizar Lacre</button>
-              <button className="btn btn-secondary w-full text-danger" onClick={() => handleDelete(modal.headset.id)}><Trash2 size={16} /> Excluir Registro</button>
             </div>
+
+            {/* Grupo: Estado e Manutenção */}
+            <div className="action-group">
+              <span className="action-group-label">Condição Técnica</span>
+              <div className="action-group-content">
+                {modal.headset.status === 'defeito' && <button className="btn btn-primary w-full" style={{ background: 'var(--accent)' }} onClick={() => handleStatusRapido(modal.headset, 'manutencao')}><Wrench size={16} /> Enviar p/ Manutenção</button>}
+                {modal.headset.status === 'manutencao' && <button className="btn btn-primary w-full" style={{ background: 'var(--success)' }} onClick={() => openRetornoManutencao(modal.headset)}><CheckCircle size={16} /> Registrar Retorno</button>}
+                
+                {!(modal.headset.status === 'manutencao') && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                    <button className="btn btn-secondary btn-small text-danger" onClick={() => handleStatusRapido(modal.headset, 'defeito')} title="Defeito">
+                      <AlertTriangle size={14} /> Defeito
+                    </button>
+                    <button className="btn btn-secondary btn-small text-danger" onClick={() => handleStatusRapido(modal.headset, 'perdido')} title="Extravio">
+                      <XCircle size={14} /> Extravio
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Grupo: Configurações */}
+            <div className="action-group">
+              <span className="action-group-label">Sistema</span>
+              <div className="action-group-content" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <button className="btn btn-secondary w-full" onClick={() => openEdit(modal.headset)}><FileText size={16} /> Editar Cadastro</button>
+                <button className="btn btn-secondary w-full" onClick={() => openTrocaLacre(modal.headset)}><RotateCcw size={16} /> Atualizar Lacre</button>
+                <button className="btn btn-secondary w-full text-danger" style={{ marginTop: '0.5rem', borderStyle: 'dashed' }} onClick={() => handleDelete(modal.headset.id)}><Trash2 size={16} /> Excluir Registro</button>
+              </div>
+            </div>
+
           </div>
+
+          <style>{`
+            .action-group { display: flex; flex-direction: column; gap: 0.5rem; }
+            .action-group-label { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; padding-left: 2px; }
+            .action-group-content { display: flex; flex-direction: column; gap: 0.5rem; }
+            .action-btn-highlight { font-weight: 700; border: 1px solid var(--border); }
+          `}</style>
         </Modal>
       )}
 
@@ -820,7 +927,12 @@ export function HeadsetsPage() {
 
       {/* Modal: Retorno Manutenção */}
       {modal?.mode === 'retornoManutencao' && (
-        <Modal title={`Retorno: ${modal.form.lacre}`} onClose={() => setModal(null)} footer={<><button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button><button type="submit" form="f-ret" className="btn btn-primary">Efetivar</button></>}>
+        <Modal 
+          title={`Retorno: ${modal.form.lacre}`} 
+          onClose={() => setModal(null)} 
+          icon={Wrench}
+          footer={<><button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button><button type="submit" form="f-ret" className="btn btn-primary">Efetivar</button></>}
+        >
           <form id="f-ret" className="form-grid" onSubmit={handleRetornoManutencao}>
             <label className="full">Custo Reparo (R$)<input type="number" step="0.01" className="input" value={modal.form.custo} onChange={e => setModal(m => ({...m, form: {...m.form, custo: e.target.value}}))} /></label>
             <label className="full">Serviços / Peças<textarea className="input" rows={2} value={modal.form.pecas} onChange={e => setModal(m => ({...m, form: {...m.form, pecas: e.target.value}}))} placeholder="Ex: Cabo trocado, espumas novas..." /></label>
@@ -831,7 +943,13 @@ export function HeadsetsPage() {
 
       {/* Modal: Histórico */}
       {modal?.mode === 'historico' && (
-        <Modal title={`Histórico: ${modal.headset.lacre}`} onClose={() => setModal(null)} size="lg" footer={<button className="btn btn-secondary" onClick={() => setModal(null)}>Fechar</button>}>
+        <Modal 
+          title={`Histórico: ${modal.headset.lacre}`} 
+          onClose={() => setModal(null)} 
+          size="lg" 
+          icon={History}
+          footer={<button className="btn btn-secondary" onClick={() => setModal(null)}>Fechar</button>}
+        >
           {modal.loading ? <p className="muted">Carregando...</p> : modal.rows.length === 0 ? <p className="muted">Nenhuma alteração registrada.</p> : (
             <div className="table-container" style={{ maxHeight: '400px', marginTop: 0 }}>
               <table>
@@ -840,112 +958,6 @@ export function HeadsetsPage() {
               </table>
             </div>
           )}
-        </Modal>
-      )}
-
-      {/* Modal: Desligamento em Massa - Visual Oficial Premium Vertical */}
-      {modal?.mode === 'desligamento' && (
-        <Modal 
-          title="Procedimento de Desligamento" 
-          onClose={() => setModal(null)}
-          size="md"
-          footer={
-            <>
-              <button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button>
-              <button 
-                type="submit" 
-                form="f-deslig" 
-                className="btn btn-primary" 
-                style={{ 
-                  background: 'var(--danger)', 
-                  borderColor: 'rgba(255,255,255,0.1)',
-                  boxShadow: '0 4px 15px rgba(239, 68, 68, 0.3)' 
-                }}
-              >
-                Efetivar Baixa Geral
-              </button>
-            </>
-          }
-        >
-          <form id="f-deslig" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }} onSubmit={handleDesligamento}>
-            {/* Header de Alerta Integrado */}
-            <div style={{ 
-              background: 'linear-gradient(to bottom right, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.02))', 
-              border: '1px solid rgba(239, 68, 68, 0.2)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '1.5rem',
-              position: 'relative',
-              overflow: 'hidden'
-            }}>
-              <div style={{ position: 'absolute', right: '-10px', top: '-10px', opacity: 0.1 }}>
-                <UserMinus size={80} className="text-danger" />
-              </div>
-              
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.25rem', position: 'relative', zIndex: 1 }}>
-                <div style={{ 
-                  background: 'var(--danger)', 
-                  padding: '0.75rem', 
-                  borderRadius: 'var(--radius-md)', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)'
-                }}>
-                  <AlertTriangle size={24} color="white" />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <h4 style={{ color: 'var(--text)', fontSize: '1.05rem', fontWeight: '700', marginBottom: '0.35rem' }}>
-                    Recolhimento de Ativos por Desligamento
-                  </h4>
-                  <p className="small muted" style={{ margin: 0, fontSize: '0.85rem', lineHeight: '1.5' }}>
-                    O sistema irá localizar e desvincular automaticamente todos os equipamentos registrados sob esta matrícula, movendo-os para o <strong>estoque disponível</strong>.
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text)', fontWeight: '600' }}>
-                  <Hash size={14} className="text-accent" /> Matrícula do Operador
-                </span>
-                <input 
-                  className="input mono" 
-                  style={{ 
-                    fontSize: '1.25rem', 
-                    padding: '1rem', 
-                    textAlign: 'center', 
-                    background: 'rgba(255,255,255,0.02)',
-                    letterSpacing: '3px',
-                    borderColor: 'var(--border)'
-                  }}
-                  value={modal.form.matricula} 
-                  onChange={e => setModal(m => ({...m, form: {...m.form, matricula: e.target.value}}))} 
-                  placeholder="000000"
-                  autoFocus
-                  required 
-                />
-              </label>
-
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text)', fontWeight: '600' }}>
-                  <Info size={14} className="text-accent" /> Justificativa / Observações
-                </span>
-                <textarea 
-                  className="input" 
-                  rows={3} 
-                  style={{ 
-                    padding: '0.75rem', 
-                    background: 'rgba(255,255,255,0.02)',
-                    fontSize: '0.9rem' 
-                  }}
-                  value={modal.form.observacao} 
-                  onChange={e => setModal(m => ({...m, form: {...m.form, observacao: e.target.value}}))} 
-                  placeholder="Ex: Desligamento reportado pelo RH em 27/05..." 
-                />
-              </label>
-            </div>
-          </form>
         </Modal>
       )}
 

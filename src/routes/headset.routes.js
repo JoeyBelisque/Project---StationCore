@@ -13,6 +13,7 @@ import {
   remover,
   trocar,
 } from "../controllers/headset.controller.js";
+import { requireAdmin } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
@@ -21,7 +22,7 @@ router.get("/historico-recente", (req, res, next) => {
   // Chamada direta para simplificar dado o limite baixo
   import("../models/headset.model.js").then(m => m.getGlobalHistorico()).then(h => res.json(h)).catch(next);
 });
-router.post("/batch", async (req, res, next) => {
+router.post("/batch", requireAdmin, async (req, res, next) => {
   try {
     const { ids, data } = req.body;
     const { updateBatch } = await import("../models/headset.model.js");
@@ -31,12 +32,12 @@ router.post("/batch", async (req, res, next) => {
     next(e);
   }
 });
-router.post("/desligamento/:matricula", desligamento);
+router.post("/desligamento/:matricula", requireAdmin, desligamento);
 router.post("/", criar);
 router.put("/:id", atualizar);
 router.patch("/:id/lacre", atualizarLacre);
 router.post("/:id/trocar", trocar);
 router.get("/:id/historico", historico);
-router.delete("/:id", remover);
+router.delete("/:id", requireAdmin, remover);
 
 export default router;

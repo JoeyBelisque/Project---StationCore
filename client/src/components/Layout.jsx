@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { 
   LayoutDashboard, 
@@ -14,10 +14,15 @@ import {
   X,
   Home,
   ChevronRight,
+  ChevronDown,
   User as UserIcon,
   Shield,
   Key,
-  History
+  History,
+  Package,
+  Calendar,
+  Layers,
+  Wrench
 } from 'lucide-react'
 import { clearUserSession, getStoredUser, isAdmin, saveUserSession } from '../lib/auth'
 import stationcoreLogo from '../assets/stationcore_icone.png'
@@ -30,15 +35,37 @@ import { atualizarUsuario } from '../services/usuariosApi'
  * Gerencia a navegação entre as páginas do sistema.
  */
 function Sidebar({ isOpen, toggleMobileMenu }) {
+  // Controle de estado para submenus: 'headsets' inicia aberto para melhor UX
+  const [openDropdown, setOpenDropdown] = useState('headsets')
+  const location = useLocation()
+
   const navItems = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-    { to: '/headsets', label: 'Headsets', icon: Headphones },
+    { 
+      label: 'Headsets', 
+      icon: Headphones,
+      id: 'headsets',
+      children: [
+        { to: '/headsets', label: 'Visão Geral', icon: Layers, end: true },
+        { to: '/headsets?categoria=operacao', label: 'Operação', icon: Package },
+        { to: '/headsets?categoria=emprestimo', label: 'Empréstimos', icon: Calendar },
+      ]
+    },
+    // ... outros itens
     { to: '/computadores', label: 'Computadores', icon: Monitor },
     { to: '/usuarios', label: 'Usuários', icon: Users, adminOnly: true },
     { to: '/auditoria', label: 'Auditoria', icon: History },
     { to: '/importar', label: 'Importar', icon: ArrowDownToLine },
     { to: '/exportar', label: 'Exportar', icon: ArrowUpFromLine },
   ]
+
+  const toggleDropdown = (id) => {
+    setOpenDropdown(openDropdown === id ? null : id)
+  }
+
+  const handleNavClick = () => {
+    if (isOpen) toggleMobileMenu()
+  }
 
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
@@ -47,22 +74,80 @@ function Sidebar({ isOpen, toggleMobileMenu }) {
         <div className="sidebar-brand">
           <h1>StationCore</h1>
         </div>
-        {/* Botão de fechar visível apenas no mobile */}
         <button type="button" className="btn-mobile-close" onClick={toggleMobileMenu}>
           <X size={20} />
         </button>
       </div>
 
       <nav className="sidebar-nav">
-        {navItems.map((item) => {
+        {navItems.map((item, idx) => {
           if (item.adminOnly && !isAdmin()) return null
+
+          // Monta a configuração atual da URL (Path + Query) para comparação estrita
+          const currentFullConfig = location.pathname + location.search
+
+          if (item.children) {
+            const isDropdownOpen = openDropdown === item.id
+            // Verifica se algum filho do dropdown está ativo para destacar o pai
+            const isAnyChildActive = item.children.some(child => currentFullConfig === child.to)
+
+            return (
+              <div key={item.id || idx} className={`sidebar-dropdown ${isDropdownOpen ? 'is-open' : ''}`}>
+                <button 
+                  type="button" 
+                  className={`sidebar-link dropdown-toggle ${isAnyChildActive ? 'active' : ''}`}
+                  onClick={() => toggleDropdown(item.id)}
+                >
+                  <div className="row gap">
+                    <item.icon size={18} />
+                    <span>{item.label}</span>
+                  </div>
+                  {/* Alterna o ícone baseado no estado de expansão */}
+                  {isDropdownOpen ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
+                </button>
+                
+                <div className="dropdown-content-wrapper">
+                  <div className="dropdown-line"></div>
+                  <div className="dropdown-content">
+                    {item.children.map((child) => {
+                      // Lógica de Destaque Estrita: Compara Path + Query Params
+                      const isLinkActive = currentFullConfig === child.to
+                      return (
+                        <NavLink 
+                          key={child.to} 
+                          to={child.to} 
+                          end={child.end}
+                          /**
+                           * NOTA DIDÁTICA: Usamos uma função anônima em className para desativar
+                           * o motor automático de destaque do NavLink, que ignoraria os Query Params.
+                           * Isso garante que '/headsets' e '/headsets?categoria=x' não fiquem ativos juntos.
+                           */
+                          className={() => `sidebar-sublink ${isLinkActive ? 'active' : ''}`}
+                          onClick={handleNavClick}
+                        >
+                          <child.icon size={14} />
+                          <span>{child.label}</span>
+                        </NavLink>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )
+          }
+
+          // Lógica de ativação para itens sem sub-nível
+          const isItemActive = item.end 
+            ? location.pathname === item.to 
+            : location.pathname.startsWith(item.to)
+
           return (
             <NavLink 
               key={item.to} 
               to={item.to} 
               end={item.end}
-              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-              onClick={() => isOpen && toggleMobileMenu()}
+              className={`sidebar-link ${isItemActive ? 'active' : ''}`}
+              onClick={handleNavClick}
             >
               <item.icon size={18} />
               <span>{item.label}</span>
@@ -74,6 +159,79 @@ function Sidebar({ isOpen, toggleMobileMenu }) {
       <div className="sidebar-footer">
         <p className="small muted">v1.2.5 Premium</p>
       </div>
+
+      <style>{`
+        .sidebar-dropdown { display: flex; flex-direction: column; position: relative; }
+        .dropdown-toggle { 
+          width: 100%; 
+          justify-content: space-between !important; 
+          background: transparent; 
+          border: none; 
+          cursor: pointer; 
+        }
+        .dropdown-toggle .chevron { opacity: 0.5; transition: transform 0.2s; }
+        
+        .dropdown-content-wrapper {
+          display: none;
+          position: relative;
+          margin-left: 1.25rem;
+          padding-left: 0.5rem;
+        }
+        .is-open .dropdown-content-wrapper { display: flex; }
+        
+        .dropdown-line {
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 15px;
+          width: 1.5px;
+          background: var(--border);
+          border-radius: 99px;
+        }
+
+        .dropdown-content { 
+          display: flex; 
+          flex-direction: column; 
+          gap: 2px;
+          width: 100%;
+          padding: 0.25rem 0;
+        }
+        
+        .sidebar-sublink {
+          display: flex;
+          align-items: center;
+          gap: 0.65rem;
+          padding: 0.5rem 0.75rem;
+          color: var(--text-muted);
+          text-decoration: none;
+          font-size: 0.825rem;
+          font-weight: 500;
+          border-radius: var(--radius-sm);
+          transition: var(--transition);
+          position: relative;
+        }
+
+        .sidebar-sublink::before {
+          content: '';
+          position: absolute;
+          left: -0.5rem;
+          top: 50%;
+          width: 0.5rem;
+          height: 1.5px;
+          background: var(--border);
+        }
+
+        .sidebar-sublink:hover { color: var(--text); background: var(--surface-hover); }
+        .sidebar-sublink.active { 
+          color: var(--accent-light); 
+          background: var(--accent-glow); 
+          font-weight: 600;
+        }
+        .sidebar-sublink.active::before { background: var(--accent); }
+        
+        .sidebar-sublink svg { opacity: 0.6; }
+        .sidebar-sublink.active svg { opacity: 1; color: var(--accent-light); }
+      `}</style>
     </aside>
   )
 }
@@ -200,6 +358,7 @@ export function Layout() {
           title="Configurações de Perfil"
           onClose={() => !isSavingProfile && setIsProfileModalOpen(false)}
           size="sm"
+          icon={UserIcon}
           footer={
             <>
               <button className="btn btn-secondary" onClick={() => setIsProfileModalOpen(false)} disabled={isSavingProfile}>Cancelar</button>

@@ -9,7 +9,11 @@ import {
   MapPin, 
   Hash,
   AlertTriangle,
-  MoreHorizontal
+  MoreHorizontal,
+  History,
+  RefreshCw,
+  Eye,
+  FileText
 } from 'lucide-react'
 import { PC_STATUS, labelByValue } from '../constants/status'
 import { Modal } from '../components/Modal'
@@ -20,6 +24,8 @@ import {
   listarComputadores,
   atualizarComputador,
   removerComputador,
+  listarHistoricoComputador,
+  trocarComputador
 } from '../services/computadoresApi'
 
 const PAGE_SIZE = 25
@@ -45,6 +51,7 @@ const emptyForm = () => ({
   serial_number: '',
   status: 'em_uso',
   pa: '',
+  observacoes: ''
 })
 
 /**
@@ -122,6 +129,7 @@ export function ComputadoresPage() {
       serial_number: f.serial_number.trim(),
       status: f.status,
       pa: f.pa.trim(),
+      observacoes: f.observacoes.trim()
     }
     try {
       if (f.id) await atualizarComputador(f.id, body)
@@ -134,6 +142,37 @@ export function ComputadoresPage() {
 
   const openNew = () => setModal({ mode: 'edit', form: emptyForm() })
   const openEdit = (row) => setModal({ mode: 'edit', form: { ...emptyForm(), ...row } })
+  const openView = (row) => setModal({ mode: 'view', pc: row })
+  
+  const openHistorico = async (row) => {
+    setModal({ mode: 'historico', pc: row, loading: true, rows: [], error: '' })
+    try {
+      const data = await listarHistoricoComputador(row.id)
+      setModal({ mode: 'historico', pc: row, loading: false, rows: Array.isArray(data) ? data : [], error: '' })
+    } catch (err) {
+      setModal({ mode: 'historico', pc: row, loading: false, rows: [], error: err.message || 'Falha ao carregar histórico' })
+    }
+  }
+
+  const openTroca = (row) => {
+    const disponiveis = rows.filter(r => r.id !== row.id && r.status === 'estoque')
+    setModal({ 
+      mode: 'troca', 
+      pc: row, 
+      form: { id_novo: '', status_novo_original: 'manutencao', observacao: '' },
+      disponiveis 
+    })
+  }
+
+  async function handleTroca(e) {
+    e.preventDefault()
+    try {
+      await trocarComputador(modal.pc.id, modal.form)
+      addToast('Substituição realizada com sucesso!')
+      setModal(null)
+      await load()
+    } catch (err) { addToast(err.message || 'Erro na troca', 'error') }
+  }
 
   async function handleDelete(id) {
     if (!confirm('Remover este computador do sistema?')) return
@@ -235,15 +274,26 @@ export function ComputadoresPage() {
                   </td>
                   {!isCompact && (
                     <td className="small muted">
-                      {formatUpdatedAt(r.updated_at ?? r.atualizadoEm ?? r.atualizado_em)}
+                      {formatUpdatedAt(r.updated_at)}
                     </td>
                   )}
                   <td style={{ textAlign: 'right' }}>
                     <div className="row gap" style={{ justifyContent: 'flex-end' }}>
-                      <button className="btn btn-secondary btn-icon" onClick={() => openEdit(r)}>
+                      <button className="btn btn-secondary btn-icon" title="Ver Detalhes" onClick={() => openView(r)}>
+                        <Eye size={16} />
+                      </button>
+                      {r.status === 'em_uso' && (
+                        <button className="btn btn-secondary btn-icon text-warning" title="Substituir PC" onClick={() => openTroca(r)}>
+                          <RefreshCw size={16} />
+                        </button>
+                      )}
+                      <button className="btn btn-secondary btn-icon" title="Editar" onClick={() => openEdit(r)}>
                         <Edit3 size={16} />
                       </button>
-                      <button className="btn btn-secondary btn-icon text-danger" onClick={() => handleDelete(r.id)}>
+                      <button className="btn btn-secondary btn-icon" title="Histórico" onClick={() => openHistorico(r)}>
+                        <History size={16} />
+                      </button>
+                      <button className="btn btn-secondary btn-icon text-danger" title="Excluir" onClick={() => handleDelete(r.id)}>
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -257,6 +307,65 @@ export function ComputadoresPage() {
 
       <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
 
+      {/* Modal: Visualizar Detalhes */}
+      {modal?.mode === 'view' && (
+        <Modal 
+          title={`PC: ${modal.pc.hostname}`} 
+          onClose={() => setModal(null)}
+          size="md"
+          icon={Monitor}
+          footer={<button className="btn btn-secondary" onClick={() => setModal(null)}>Fechar</button>}
+        >
+          <div className="modal-view-container">
+            {/* Header: Status Integrado */}
+            <div className="modal-header-status">
+              <span className="prop-label">Situação Atual</span>
+              <span className={`status-pill ${getBadgeClass(modal.pc.status)}`}>
+                {labelByValue(PC_STATUS, modal.pc.status)}
+              </span>
+            </div>
+
+            {/* Grid de Dados: Uniforme */}
+            <div className="modal-data-grid">
+              <div className="data-card">
+                <span className="prop-label">Hostname</span>
+                <p className="prop-value mono">{modal.pc.hostname}</p>
+              </div>
+              <div className="data-card">
+                <span className="prop-label">PA / Posto</span>
+                <p className="prop-value">{modal.pc.pa || '—'}</p>
+              </div>
+              <div className="data-card">
+                <span className="prop-label">Série</span>
+                <p className="prop-value mono">{modal.pc.serial_number || '—'}</p>
+              </div>
+              <div className="data-card">
+                <span className="prop-label">Identificador</span>
+                <p className="prop-value">{modal.pc.nome || '—'}</p>
+              </div>
+            </div>
+
+            {/* Observações */}
+            <div className="modal-vinc-card">
+                <span className="prop-label">Observações Técnicas</span>
+                <p className="prop-value" style={{ fontWeight: '400' }}>{modal.pc.observacoes || 'Sem notas adicionais.'}</p>
+            </div>
+          </div>
+
+          <style>{`
+            .modal-view-container { display: flex; flex-direction: column; gap: 1rem; padding: 0.25rem; }
+            .modal-header-status { display: flex; flex-direction: column; align-items: center; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border); gap: 0.25rem; }
+            .status-pill { padding: 0.35rem 0.85rem; border-radius: 999px; font-weight: 700; font-size: 0.8rem; }
+            .modal-data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+            .data-card { background: var(--surface-hover); padding: 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border); }
+            .modal-vinc-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem; background: var(--surface); display: flex; flex-direction: column; gap: 0.5rem; }
+            .prop-label { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.25rem; display: block; }
+            .prop-value { font-size: 0.95rem; font-weight: 600; color: var(--text); margin: 0; }
+          `}</style>
+        </Modal>
+      )}
+
+      {/* Modal: Editar / Novo */}
       {modal?.mode === 'edit' && (
         <Modal
           title={modal.form.id ? 'Editar Equipamento' : 'Cadastrar PC'}
@@ -273,7 +382,75 @@ export function ComputadoresPage() {
                 {PC_STATUS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </label>
+            <label className="full">Observações Técnicas
+              <textarea className="input" rows={3} value={modal.form.observacoes} onChange={e => setModal(m => ({...m, form: {...m.form, observacoes: e.target.value}}))} />
+            </label>
           </form>
+        </Modal>
+      )}
+
+      {/* Modal: Troca / Substituição */}
+      {modal?.mode === 'troca' && (
+        <Modal 
+          title={`Substituição: ${modal.pc.hostname}`} 
+          onClose={() => setModal(null)} 
+          icon={RefreshCw}
+          footer={<><button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button><button type="submit" form="f-swap" className="btn btn-primary" style={{ background: 'var(--warning)' }}>Efetivar Troca</button></>}
+        >
+          <form id="f-swap" className="form-grid" onSubmit={handleTroca}>
+            <div className="full badge badge-info" style={{ padding: '1rem', marginBottom: '0.5rem', borderRadius: '4px', display: 'block' }}>
+              PA Atual: <strong>{modal.pc.pa}</strong>
+              <p className="small">A PA será transferida para o novo computador.</p>
+            </div>
+            <label className="full">Selecionar Novo PC (Estoque)
+              <select className="input" value={modal.form.id_novo} onChange={e => setModal(m => ({...m, form: {...m.form, id_novo: e.target.value}}))} required>
+                <option value="">Selecione...</option>
+                {modal.disponiveis.map(p => (
+                  <option key={p.id} value={p.id}>{p.nome ? `${p.nome} (${p.hostname})` : p.hostname} | SN: {p.serial_number || '—'}</option>
+                ))}
+              </select>
+            </label>
+            <label className="full">Motivo / Destino do Antigo
+              <select className="input" value={modal.form.status_novo_original} onChange={e => setModal(m => ({...m, form: {...m.form, status_novo_original: e.target.value}}))} required>
+                <option value="manutencao">Enviar p/ Manutenção</option>
+                <option value="inutilizavel">Marcar como Inutilizável</option>
+                <option value="troca_pendente">Troca Pendente (Aguardando Retirada)</option>
+              </select>
+            </label>
+            <label className="full">Obs Técnicas
+              <textarea className="input" rows={2} value={modal.form.observacao} onChange={e => setModal(m => ({...m, form: {...m.form, observacao: e.target.value}}))} />
+            </label>
+          </form>
+        </Modal>
+      )}
+
+      {/* Modal: Histórico */}
+      {modal?.mode === 'historico' && (
+        <Modal 
+          title={`Histórico: ${modal.pc.hostname}`} 
+          onClose={() => setModal(null)} 
+          size="lg" 
+          icon={History}
+          footer={<button className="btn btn-secondary" onClick={() => setModal(null)}>Fechar</button>}
+        >
+          {modal.loading ? <p className="muted">Carregando...</p> : modal.error ? <p className="text-danger">{modal.error}</p> : modal.rows.length === 0 ? <p className="muted">Nenhuma alteração registrada.</p> : (
+            <div className="table-container" style={{ maxHeight: '400px', marginTop: 0 }}>
+              <table>
+                <thead><tr><th>Data</th><th>Ação</th><th>Campo</th><th>De</th><th>Para</th></tr></thead>
+                <tbody>
+                  {modal.rows.map(r => (
+                    <tr key={r.id}>
+                      <td className="small muted">{new Date(r.created_at).toLocaleString('pt-BR')}</td>
+                      <td><span className="badge badge-info" style={{ fontSize: '0.65rem' }}>{r.acao}</span></td>
+                      <td><strong>{r.campo || '—'}</strong></td>
+                      <td className="mono small">{r.valor_anterior || '—'}</td>
+                      <td className="mono small">{r.valor_novo || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Modal>
       )}
     </div>

@@ -5,8 +5,9 @@ import { X } from 'lucide-react'
 /**
  * Componente Modal Premium
  * Exibe conteúdo sobreposto com fundo escurecido e centralização garantida usando Portal.
+ * Agora suporta um ícone opcional no cabeçalho para maior impacto visual.
  */
-export function Modal({ title, children, onClose, footer, size = 'md' }) {
+export function Modal({ title, icon: Icon, children, onClose, footer, size = 'md' }) {
   // Fecha o modal ao pressionar a tecla Escape
   useEffect(() => {
     const onKey = (e) => {
@@ -33,7 +34,22 @@ export function Modal({ title, children, onClose, footer, size = 'md' }) {
         onClick={(e) => e.stopPropagation()}
       >
         <header className="modal-head">
-          <h2 id="modal-title">{title}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {Icon && (
+              <div style={{ 
+                color: 'var(--accent)', 
+                background: 'var(--accent-glow)', 
+                padding: '0.5rem', 
+                borderRadius: 'var(--radius-md)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Icon size={20} />
+              </div>
+            )}
+            <h2 id="modal-title">{title}</h2>
+          </div>
           <button 
             type="button" 
             className="btn-icon-close" 

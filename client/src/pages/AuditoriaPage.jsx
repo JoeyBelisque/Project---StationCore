@@ -10,7 +10,8 @@ import {
   ClipboardList,
   ShieldCheck,
   MoreHorizontal,
-  LayoutDashboard
+  LayoutDashboard,
+  Info
 } from 'lucide-react'
 import { listarAtividades } from '../services/atividadesApi'
 import { Pagination } from '../components/Pagination'
@@ -228,6 +229,7 @@ export function AuditoriaPage() {
           title="Detalhes do Evento"
           onClose={() => setSelectedRow(null)}
           size="md"
+          icon={Info}
           footer={<button className="btn btn-secondary" onClick={() => setSelectedRow(null)}>Fechar</button>}
         >
           <div className="audit-details">

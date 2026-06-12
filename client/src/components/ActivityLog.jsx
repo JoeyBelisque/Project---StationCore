@@ -65,7 +65,12 @@ export function ActivityLog({ activities = [], loading }) {
             </div>
             <div className="activity-content">
               <div className="activity-header">
-                <span className="activity-user">{user}</span>
+                <div className="row gap-xs" style={{ alignItems: 'center' }}>
+                  <span className="activity-user">{user}</span>
+                  <span className={`badge-pill ${getActionClass(action)}`}>
+                    {action.replace('_', ' ')}
+                  </span>
+                </div>
                 <span className="activity-time">{formattedTime}</span>
               </div>
               <p className="activity-description">{desc}</p>
@@ -78,22 +83,23 @@ export function ActivityLog({ activities = [], loading }) {
         .activity-log {
           display: flex;
           flex-direction: column;
-          gap: 1rem;
+          gap: 0.75rem;
         }
         .activity-item {
           display: flex;
-          gap: 1rem;
-          padding-bottom: 1rem;
-          border-bottom: 1px solid var(--border-light);
+          gap: 0.75rem;
+          padding: 0.75rem;
+          border-radius: var(--radius-md);
+          background: rgba(255, 255, 255, 0.02);
+          transition: background 0.2s ease;
         }
-        .activity-item:last-child {
-          border-bottom: none;
-          padding-bottom: 0;
+        .activity-item:hover {
+          background: rgba(255, 255, 255, 0.05);
         }
         .activity-icon-wrapper {
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
+          width: 36px;
+          height: 36px;
+          border-radius: var(--radius-sm);
           background: var(--bg-secondary);
           display: flex;
           align-items: center;
@@ -105,7 +111,7 @@ export function ActivityLog({ activities = [], loading }) {
           flex: 1;
           display: flex;
           flex-direction: column;
-          gap: 0.25rem;
+          gap: 0.15rem;
         }
         .activity-header {
           display: flex;
@@ -113,36 +119,56 @@ export function ActivityLog({ activities = [], loading }) {
           align-items: center;
         }
         .activity-user {
-          font-weight: 600;
-          font-size: 0.875rem;
+          font-weight: 700;
+          font-size: 0.85rem;
           color: var(--text);
         }
         .activity-time {
-          font-size: 0.75rem;
+          font-size: 0.7rem;
           color: var(--text-muted);
+          font-family: var(--font-mono);
         }
         .activity-description {
-          font-size: 0.8125rem;
+          font-size: 0.8rem;
           color: var(--text-muted);
           margin: 0;
-          line-height: 1.4;
+          line-height: 1.3;
         }
+        .badge-pill {
+          font-size: 0.65rem;
+          padding: 1px 6px;
+          border-radius: 10px;
+          text-transform: uppercase;
+          font-weight: 700;
+          letter-spacing: 0.02em;
+        }
+        .bp-success { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+        .bp-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+        .bp-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+        .bp-accent { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+        .bp-muted { background: var(--bg-secondary); color: var(--text-muted); }
+
+        .gap-xs { gap: 0.35rem; }
         .activity-log-empty {
           padding: 2rem;
           text-align: center;
         }
         .skeleton-row {
-          height: 48px;
-          background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--border) 50%, var(--bg-secondary) 75%);
-          background-size: 200% 100%;
-          animation: skeleton-loading 1.5s infinite;
-          border-radius: var(--radius-sm);
-        }
-        @keyframes skeleton-loading {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
+          height: 60px;
+          background: var(--bg-secondary);
+          opacity: 0.5;
+          margin-bottom: 0.5rem;
+          border-radius: var(--radius-md);
         }
       `}</style>
     </div>
   )
+}
+
+function getActionClass(action) {
+  if (action.includes('vincular') || action.includes('sucesso') || action.includes('novo')) return 'bp-success'
+  if (action.includes('troca') || action.includes('manutencao')) return 'bp-warning'
+  if (action.includes('defeito') || action.includes('excluir')) return 'bp-danger'
+  if (action.includes('operador')) return 'bp-accent'
+  return 'bp-muted'
 }

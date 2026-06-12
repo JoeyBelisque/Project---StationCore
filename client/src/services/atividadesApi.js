@@ -5,15 +5,25 @@ import { fetchJson } from '../lib/api'
  * nas últimas atualizações de headsets e computadores.
  */
 export async function listarAtividades() {
-  const possiblePaths = ['/atividades', '/logs/atividades', '/logs', '/historico']
+  const possiblePaths = ['/atividades', '/logs/atividades', '/logs', '/historico', '/headsets/historico-recente']
 
-  // 1. Tenta endpoints reais
+      // 1. Tenta endpoints reais
   for (const path of possiblePaths) {
     try {
       const data = await fetchJson(path)
-      if (data && (Array.isArray(data) || Array.isArray(data.atividades)) && (data.length > 0 || data.atividades?.length > 0)) {
-        return data
+      if (Array.isArray(data)) {
+        // Mapeia histórico específico para formato genérico de atividade
+        return data.map(item => ({
+          ...item,
+          id: item.id,
+          usuario: 'Sistema', // Logs de sistema não costumam ter user no db atual
+          acao: item.acao || 'Atualização',
+          descricao: item.observacao || `${item.acao} no campo ${item.campo}`,
+          tipo: 'headset',
+          lacre: item.lacre || ''
+        }))
       }
+      if (data && Array.isArray(data.atividades)) return data.atividades
     } catch { /* continua */ }
   }
 

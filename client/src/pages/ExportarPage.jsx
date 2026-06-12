@@ -37,12 +37,15 @@ const STATUS_PC = [
 
 const COLUNAS_HEADSET = [
   { id: 'nome', label: 'Nome/Identificador' },
-  { id: 'matricula', label: 'Matrícula' },
   { id: 'lacre', label: 'Lacre' },
+  { id: 'nome_operador', label: 'Operador/Responsável' },
+  { id: 'matricula', label: 'Matrícula' },
   { id: 'marca', label: 'Marca' },
   { id: 'numero_serie', label: 'Nº Série' },
   { id: 'status', label: 'Status' },
   { id: 'categoria', label: 'Categoria' },
+  { id: 'data_devolucao', label: 'Data Prev. Devolução' },
+  { id: 'data_envio_manutencao', label: 'Data Envio Manutenção' },
   { id: 'observacoes', label: 'Observações' },
   { id: 'updated_at', label: 'Última Atualização' },
 ]
@@ -53,6 +56,7 @@ const COLUNAS_PC = [
   { id: 'hostname', label: 'Hostname' },
   { id: 'serial_number', label: 'Nº Série' },
   { id: 'status', label: 'Status' },
+  { id: 'observacoes', label: 'Observações' },
   { id: 'updated_at', label: 'Última Atualização' },
 ]
 
@@ -116,9 +120,12 @@ export function ExportarPage() {
       colunasAtivas.forEach(id => {
         const label = dicionario.find(c => c.id === id)?.label || id
         let valor = r[id]
-        if (id === 'updated_at' || id === 'created_at') {
+        
+        // Formatação amigável para datas
+        if (['updated_at', 'created_at', 'data_devolucao', 'data_envio_manutencao'].includes(id)) {
           valor = valor ? new Date(valor).toLocaleString('pt-BR') : '—'
         }
+        
         obj[label] = valor ?? '—'
       })
       return obj

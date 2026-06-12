@@ -179,6 +179,7 @@ export function UsuariosPage() {
         <Modal
           title={modal.form.id ? 'Editar Usuário' : 'Novo Usuário'}
           onClose={() => setModal(null)}
+          icon={modal.form.id ? Edit3 : Plus}
           footer={<><button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button><button type="submit" form="f-user" className="btn btn-primary">Salvar</button></>}
         >
           <form id="f-user" className="form-grid" onSubmit={handleSubmit}>
