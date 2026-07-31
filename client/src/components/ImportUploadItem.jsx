@@ -119,7 +119,7 @@ export function ImportUploadItem({ tipo = 'headsets' }) {
   const hasValidationErrors = validationResult && !validationResult.ok && validationResult.errors?.length > 0
 
   return (
-    <div className="import-card-item-v2">
+    <div className="import-card-item-v2" style={{ padding: '1.5rem', background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
       <div 
         className={`drop-zone-premium ${isDragging ? 'dragging' : ''} ${file ? 'has-file' : ''} ${hasValidationErrors ? 'has-errors' : ''}`}
         onDragOver={onDragOver}

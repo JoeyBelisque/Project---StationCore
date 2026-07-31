@@ -7,7 +7,7 @@ export const HEADSET_STATUS = [
   { value: 'manutencao', label: 'Manutenção' },
   { value: 'reserva', label: 'Reserva' },
   { value: 'desligado', label: 'Desligado' },
-  { value: 'perdido', label: 'Perdido' },
+  { value: 'perdido', label: 'Extravio' },
   { value: 'furtado', label: 'Furtado' },
 ]
 
@@ -17,6 +17,8 @@ export const PC_STATUS = [
   { value: 'inutilizavel', label: 'Inutilizável' },
   { value: 'troca_pendente', label: 'Troca pendente' },
   { value: 'estoque', label: 'Estoque' },
+  { value: 'perdido', label: 'Extravio' },
+  { value: 'furtado', label: 'Furtado' },
 ]
 
 export function labelByValue(list, value) {

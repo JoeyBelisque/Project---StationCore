@@ -11,10 +11,12 @@ const STATUS_HEADSET = new Set([
   "reserva",
   "troca_pendente",
   "desligado",
+  "perdido",
+  "furtado",
 ]);
 const CATEGORIA_HEADSET = new Set(["operacao", "emprestimo", "entrega", "manutencao"]);
 const MARCAS_PERMITIDAS = new Set(["intelbras", "plantronics"]);
-const STATUS_COMPUTADOR = new Set(["em_uso", "troca_pendente", "inutilizavel", "manutencao", "estoque"]);
+const STATUS_COMPUTADOR = new Set(["em_uso", "troca_pendente", "inutilizavel", "manutencao", "estoque", "perdido", "furtado"]);
 
 function normalizeText(value) {
   return String(value ?? "").trim();
@@ -34,9 +36,11 @@ function deriveCategoria(status) {
   return 'operacao';
 }
 
-function normalizeHeadsetLifecycle(rawStatus, rawObservacao = "") {
-  const statusNorm = normalizeStatus(rawStatus, "estoque");
+function normalizeHeadsetLifecycle(rawStatus, rawObservacao = "", { matricula = "", nome_operador = "" } = {}) {
+  const statusRaw = normalizeText(rawStatus);
   const observacao = normalizeText(rawObservacao);
+  const hasOperador = !!(matricula || nome_operador);
+  const statusNorm = statusRaw ? normalizeStatus(rawStatus, "estoque") : (hasOperador ? "em_uso" : "estoque");
 
   if (["retorno_manutencao", "retornou_manutencao", "voltou_manutencao"].includes(statusNorm)) {
     const obs = observacao
@@ -44,8 +48,17 @@ function normalizeHeadsetLifecycle(rawStatus, rawObservacao = "") {
       : "Retorno de manutenção via importação";
     return { status: "estoque", categoria: "operacao", observacoes: obs };
   }
+  if (["extravio", "extraviado", "perda"].includes(statusNorm)) {
+    return { status: "perdido", categoria: "operacao", observacoes: observacao };
+  }
+  if (["furto", "roubo"].includes(statusNorm)) {
+    return { status: "furtado", categoria: "operacao", observacoes: observacao };
+  }
   if (statusNorm === "disponivel") return { status: "estoque", categoria: "operacao", observacoes: observacao };
   if (statusNorm === "defeito") return { status: "defeito", categoria: "manutencao", observacoes: observacao };
+  if (hasOperador && (statusNorm === "estoque" || !statusRaw)) {
+    return { status: "em_uso", categoria: "operacao", observacoes: observacao };
+  }
 
   return { status: statusNorm, categoria: deriveCategoria(statusNorm), observacoes: observacao };
 }
@@ -131,7 +144,7 @@ function collectHeadsets(rows) {
     const lacre = normalizeText(raw.lacre);
     const marca = normalizeText(raw.marca);
     const numero_serie = normalizeText(raw.numero_serie);
-    const lifecycle = normalizeHeadsetLifecycle(raw.status, raw.observacoes);
+    const lifecycle = normalizeHeadsetLifecycle(raw.status, raw.observacoes, { matricula, nome_operador });
     const status = lifecycle.status;
     const categoria = lifecycle.categoria;
     const observacoes = lifecycle.observacoes;
@@ -310,8 +323,8 @@ export async function importarPlanilha(buffer, mode = "validar") {
   const workbook = XLSX.read(buffer, { type: "buffer", codepage: 65001 });
   const headsetSheet = pickSheet(workbook, "headsets");
   const computadorSheet = pickSheet(workbook, "computadores");
-  if (!headgetSheet || !computadorSheet) return { ok: false, errors: [{ planilha: "arquivo", linha: 0, erro: "O arquivo precisa ter as abas 'headsets' e 'computadores'." }], summary: null };
-  const rawHeadsets = parseRows(headgetSheet);
+  if (!headsetSheet || !computadorSheet) return { ok: false, errors: [{ planilha: "arquivo", linha: 0, erro: "O arquivo precisa ter as abas 'headsets' e 'computadores'." }], summary: null };
+  const rawHeadsets = parseRows(headsetSheet);
   const rawComputadores = parseRows(computadorSheet);
   const { validRows: headsets, errors: headsetErrors } = collectHeadsets(rawHeadsets);
   const { validRows: computadores, errors: computadorErrors } = collectComputadores(rawComputadores);
@@ -350,4 +363,36 @@ export async function importarComputadores(buffer, mode = "validar") {
     if (mode === "importar") await persistComputadores(validRows);
     return { ok: true, errors: [], summary: { total_computadores: raw.length, erros: 0, modo: mode } };
   } catch (error) { return { ok: false, errors: [{ planilha: "importacao", linha: 0, erro: error.message }], summary: null }; }
+}
+
+const TEMPLATE_HEADSETS = [
+  { LACRE: "HS-001", MATRICULA: "12345", NOME_OPERADOR: "João Silva", MARCA: "intelbras", NUMERO_SERIE: "", STATUS: "em_uso", OBSERVACOES: "" },
+  { LACRE: "HS-002", MATRICULA: "", NOME_OPERADOR: "", MARCA: "plantronics", NUMERO_SERIE: "SN123456", STATUS: "estoque", OBSERVACOES: "Reserva" },
+];
+
+const TEMPLATE_COMPUTADORES = [
+  { PA: "01", HOSTNAME: "PC-PA01", SERIAL_NUMBER: "ABC123", STATUS: "em_uso", OBSERVACOES: "" },
+  { PA: "02", HOSTNAME: "PC-PA02", SERIAL_NUMBER: "DEF456", STATUS: "estoque", OBSERVACOES: "" },
+];
+
+function gerarTemplateXlsx(rows, sheetName) {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+}
+
+export function gerarTemplateHeadsets() {
+  return gerarTemplateXlsx(TEMPLATE_HEADSETS, "headsets");
+}
+
+export function gerarTemplateComputadores() {
+  return gerarTemplateXlsx(TEMPLATE_COMPUTADORES, "computadores");
+}
+
+export function gerarTemplateCompleto() {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(TEMPLATE_HEADSETS), "headsets");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(TEMPLATE_COMPUTADORES), "computadores");
+  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 }

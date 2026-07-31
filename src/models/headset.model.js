@@ -439,35 +439,45 @@ export async function updateBatch(ids, data) {
   try {
     await client.query("BEGIN");
     let count = 0;
-    
-    // Normaliza apenas os campos permitidos para batch
+
     const status = data.status ? String(data.status).trim() : null;
-    const isReturningToStock = status === 'estoque' || status === 'reserva';
-    const isSendingToMaint = status === 'manutencao';
+    const statusSemOperador = ["estoque", "reserva", "defeito", "manutencao", "perdido", "furtado", "desligado"];
+    const isClearingOperador = status && statusSemOperador.includes(status);
+    const isSendingToMaint = status === "manutencao";
+    const isReturningToStock = status === "estoque" || status === "reserva";
     const observacoesAdd = data.observacoes ? String(data.observacoes).trim() : "";
 
+    function deriveCategoriaFromStatus(s) {
+      if (s === "em_uso") return "operacao";
+      if (s === "emprestimo") return "emprestimo";
+      if (s === "entrega") return "entrega";
+      if (s === "defeito" || s === "manutencao") return "manutencao";
+      return "operacao";
+    }
+
     for (const id of ids) {
-      // Busca atual para log de histórico
       const currentRes = await client.query(`SELECT * FROM headsets WHERE id = $1`, [id]);
       if (currentRes.rowCount === 0) continue;
       const current = currentRes.rows[0];
 
       const nextStatus = status || current.status;
-      const nextMatricula = isReturningToStock ? "" : current.matricula;
-      const nextNomeOperador = isReturningToStock ? "" : current.nome_operador;
-      const nextMaintDate = isSendingToMaint ? (current.data_envio_manutencao || new Date()) : (isReturningToStock ? null : current.data_envio_manutencao);
-      const nextLoanDate = isReturningToStock ? null : current.data_devolucao;
-      
-      const nextObs = observacoesAdd 
+      const nextMatricula = isClearingOperador ? "" : current.matricula;
+      const nextNomeOperador = isClearingOperador ? "" : current.nome_operador;
+      const nextCategoria = status ? deriveCategoriaFromStatus(nextStatus) : current.categoria;
+      const nextMaintDate = isSendingToMaint
+        ? (current.data_envio_manutencao || new Date())
+        : (isReturningToStock ? null : current.data_envio_manutencao);
+      const nextLoanDate = isReturningToStock || isClearingOperador ? null : current.data_devolucao;
+
+      const nextObs = observacoesAdd
         ? (current.observacoes ? `${current.observacoes}\n${observacoesAdd}` : observacoesAdd)
         : current.observacoes;
 
       await client.query(
-        `UPDATE headsets SET status = $1, observacoes = $2, matricula = $3, nome_operador = $4, data_envio_manutencao = $5, data_devolucao = $6, updated_at = NOW() WHERE id = $7`,
-        [nextStatus, nextObs, nextMatricula, nextNomeOperador, nextMaintDate, nextLoanDate, id]
+        `UPDATE headsets SET status = $1, categoria = $2, observacoes = $3, matricula = $4, nome_operador = $5, data_envio_manutencao = $6, data_devolucao = $7, updated_at = NOW() WHERE id = $8`,
+        [nextStatus, nextCategoria, nextObs, nextMatricula, nextNomeOperador, nextMaintDate, nextLoanDate, id]
       );
 
-      // Loga mudanças importantes
       if (status && status !== current.status) {
         await addHistoryEntry(client, id, "atualizacao_lote", "status", current.status, status, "Atualização em lote");
       }
@@ -477,7 +487,7 @@ export async function updateBatch(ids, data) {
       if (nextNomeOperador !== current.nome_operador) {
         await addHistoryEntry(client, id, "atualizacao_lote", "nome_operador", current.nome_operador, nextNomeOperador, "Atualização em lote");
       }
-      
+
       count++;
     }
 

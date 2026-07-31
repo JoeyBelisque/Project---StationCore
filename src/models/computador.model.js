@@ -55,8 +55,8 @@ export const createComputador = async (data) => {
   await ensureSchema();
   const { hostname, serial_number, status, pa, nome, observacoes } = data;
   
-  // Consistência: Se estoque/inutilizavel, limpa PA
-  const isAvailable = status === "estoque" || status === "inutilizavel";
+  // Consistência: Se estoque/inutilizavel/perdido/furtado, limpa PA
+  const isAvailable = status === "estoque" || status === "inutilizavel" || status === "perdido" || status === "furtado";
   const finalPa = isAvailable ? "" : (pa || "");
 
   const client = await pool.connect();
@@ -83,8 +83,8 @@ export const updateComputador = async (id, data) => {
   await ensureSchema();
   const { hostname, serial_number, status, pa, nome, observacoes } = data;
 
-  // Consistência: Se estoque/inutilizavel, limpa PA
-  const isAvailable = status === "estoque" || status === "inutilizavel";
+  // Consistência: Se estoque/inutilizavel/perdido/furtado, limpa PA
+  const isAvailable = status === "estoque" || status === "inutilizavel" || status === "perdido" || status === "furtado";
   const finalPa = isAvailable ? "" : (pa || "");
 
   const client = await pool.connect();

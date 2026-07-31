@@ -81,3 +81,29 @@ export async function importarComputadores(file, modo = 'validar') {
     throw err
   }
 }
+
+export async function baixarTemplate(tipo) {
+  const response = await fetch(`${getApiBase()}/importacao/template/${tipo}`, {
+    headers: getAuthHeader(),
+  })
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null)
+    throw new Error(data?.error || 'Erro ao baixar template')
+  }
+
+  const blob = await response.blob()
+  const filenames = {
+    headsets: 'template_headsets.xlsx',
+    computadores: 'template_computadores.xlsx',
+    completo: 'template_importacao.xlsx',
+  }
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filenames[tipo] || 'template.xlsx'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}

@@ -1,4 +1,4 @@
-import { importarPlanilha, importarHeadsets, importarComputadores } from "../services/importacao.service.js";
+import { importarPlanilha, importarHeadsets, importarComputadores, gerarTemplateHeadsets, gerarTemplateComputadores, gerarTemplateCompleto } from "../services/importacao.service.js";
 
 export async function importarInicial(req, res, next) {
   try {
@@ -81,6 +81,39 @@ export async function importarComputadoresController(req, res, next) {
           ? "Importação de computadores concluída com sucesso."
           : "Validação de computadores concluída sem erros.",
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function baixarTemplateHeadsets(req, res, next) {
+  try {
+    const buffer = gerarTemplateHeadsets();
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", 'attachment; filename="template_headsets.xlsx"');
+    return res.send(buffer);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function baixarTemplateComputadores(req, res, next) {
+  try {
+    const buffer = gerarTemplateComputadores();
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", 'attachment; filename="template_computadores.xlsx"');
+    return res.send(buffer);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function baixarTemplateCompleto(req, res, next) {
+  try {
+    const buffer = gerarTemplateCompleto();
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", 'attachment; filename="template_importacao.xlsx"');
+    return res.send(buffer);
   } catch (error) {
     next(error);
   }

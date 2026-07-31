@@ -17,7 +17,6 @@ import {
   Calendar,
   CheckSquare,
   Square,
-  Package,
   Wrench,
   Eye,
   Tag,
@@ -251,10 +250,9 @@ export function HeadsetsPage() {
     } 
   })
 
-  const openBatchToStock = () => {
-    const targets = items.filter(h => selectedIds.has(h.id) && h.status !== 'em_uso')
-    if (targets.length === 0) return addToast('Nenhum equipamento passível de retorno selecionado.', 'warning')
-    setModal({ mode: 'batchStock', count: targets.length, form: { observacao: '' } })
+  const openBatchStatus = () => {
+    if (selectedIds.size === 0) return
+    setModal({ mode: 'batchStatus', count: selectedIds.size, form: { status: 'em_uso', observacao: '' } })
   }
 
   // Carregamento de histórico
@@ -299,19 +297,19 @@ export function HeadsetsPage() {
     } catch (err) { addToast(err.message, 'error') }
   }
 
-  async function handleBatchToStock(e) {
+  async function handleBatchStatus(e) {
     e.preventDefault()
-    const targets = items.filter(h => selectedIds.has(h.id) && h.status !== 'em_uso')
-    const ids = targets.map(t => t.id)
+    const ids = [...selectedIds]
+    const { status, observacao } = modal.form
     try {
       setLoading(true)
-      await atualizarHeadsetsEmLote(ids, { 
-        status: 'estoque',
-        observacoes: modal.form.observacao.trim() || 'Retorno em lote ao estoque'
+      await atualizarHeadsetsEmLote(ids, {
+        status,
+        observacoes: observacao.trim() || `Alteração em lote para ${labelByValue(HEADSET_STATUS, status)}`,
       })
       setRecentUpdates(new Set(ids))
       setTimeout(() => setRecentUpdates(new Set()), 3000)
-      addToast(`${ids.length} equipamentos movidos para estoque!`)
+      addToast(`${ids.length} equipamento(s) atualizado(s) para "${labelByValue(HEADSET_STATUS, status)}"!`)
       setModal(null)
       await load()
     } catch (err) { addToast(err.message, 'error') } finally { setLoading(false) }
@@ -480,8 +478,6 @@ export function HeadsetsPage() {
   }
 
   const selectedCount = selectedIds.size
-  const canMoveCount = items.filter(h => selectedIds.has(h.id) && h.status !== 'em_uso').length
-  const inUseSelected = selectedCount - canMoveCount
 
   return (
     <div className="page-fade-in">
@@ -552,19 +548,12 @@ export function HeadsetsPage() {
           <div className="row space-between wrap gap">
             <div className="row gap">
               <CheckSquare size={20} className="text-accent" />
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <strong>{selectedCount} selecionado(s)</strong>
-                {inUseSelected > 0 && (
-                  <span className="small text-warning" style={{ fontSize: '0.7rem', fontWeight: 'bold' }}>
-                    {inUseSelected} em uso não serão alterados
-                  </span>
-                )}
-              </div>
+              <strong>{selectedCount} selecionado(s)</strong>
             </div>
             <div className="row gap">
               <button className="btn btn-secondary btn-small" onClick={() => setSelectedIds(new Set())}>Desmarcar</button>
-              <button className="btn btn-primary btn-small" onClick={openBatchToStock} disabled={canMoveCount === 0}>
-                <Package size={14} /> Retornar p/ Estoque ({canMoveCount})
+              <button className="btn btn-primary btn-small" onClick={openBatchStatus}>
+                <Settings2 size={14} /> Alterar Status em Lote
               </button>
             </div>
           </div>
@@ -904,12 +893,23 @@ export function HeadsetsPage() {
         </Modal>
       )}
 
-      {/* Modal: Batch Action */}
-      {modal?.mode === 'batchStock' && (
-        <Modal title="Mover p/ Estoque em Lote" onClose={() => setModal(null)} footer={<><button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button><button type="submit" form="f-batch" className="btn btn-primary">Confirmar</button></>}>
-          <form id="f-batch" onSubmit={handleBatchToStock}>
-            <div className="badge badge-info" style={{ padding: '1rem', marginBottom: '1rem', borderRadius: '4px', display: 'block' }}>Mover {modal.count} equipamentos p/ estoque? Matrículas e nomes serão removidos.</div>
-            <label className="full">Observação (Opcional)<textarea className="input" rows={3} value={modal.form.observacao} onChange={e => setModal(m => ({...m, form: {...m.form, observacao: e.target.value}}))} /></label>
+      {/* Modal: Alteração de Status em Lote */}
+      {modal?.mode === 'batchStatus' && (
+        <Modal title="Alterar Status em Lote" onClose={() => setModal(null)} footer={<><button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button><button type="submit" form="f-batch" className="btn btn-primary">Confirmar</button></>}>
+          <form id="f-batch" onSubmit={handleBatchStatus}>
+            <div className="badge badge-info" style={{ padding: '1rem', marginBottom: '1rem', borderRadius: '4px', display: 'block' }}>
+              Alterar status de <strong>{modal.count}</strong> equipamento(s) selecionado(s).
+              {modal.form.status !== 'em_uso' && modal.form.status !== 'emprestimo' && (
+                <span> Matrículas e nomes de operador serão removidos.</span>
+              )}
+            </div>
+            <label className="full">
+              <span className="form-label">Novo Status</span>
+              <select className="input" value={modal.form.status} onChange={e => setModal(m => ({...m, form: {...m.form, status: e.target.value}}))} required>
+                {HEADSET_STATUS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </label>
+            <label className="full">Observação (Opcional)<textarea className="input" rows={3} value={modal.form.observacao} onChange={e => setModal(m => ({...m, form: {...m.form, observacao: e.target.value}}))} placeholder="Ex: Correção pós-importação de planilha" /></label>
           </form>
         </Modal>
       )}
