@@ -85,7 +85,7 @@ function normalizeColumnNames(row) {
 
   const fieldMap = {
     matricula: ['matricula'],
-    nome_operador: ['operador', 'nome_operador', 'usuario_nome', 'colaborador', 'funcionario'],
+    nome_operador: ['operador', 'nome_operador', 'nome_do_operador', 'operador_nome', 'usuario_nome', 'colaborador', 'funcionario'],
     nome: ['identificador', 'nome_headset', 'nome_equipamento', 'nome_dispositivo', 'nome_pc', 'nome_computador'],
     lacre: ['lacre'],
     marca: ['marca'],
