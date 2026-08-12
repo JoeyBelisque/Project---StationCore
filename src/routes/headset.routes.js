@@ -29,6 +29,10 @@ router.post("/batch", requireAdmin, async (req, res, next) => {
     const results = await updateBatch(ids, data);
     res.json(results);
   } catch (e) {
+    if (e?.code === "VALIDATION") {
+      res.status(400).json({ error: e.message });
+      return;
+    }
     next(e);
   }
 });

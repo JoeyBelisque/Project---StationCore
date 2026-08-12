@@ -1,5 +1,5 @@
 
-exports.up = (pgm) => {
+export const up = (pgm) => {
   // 1. Atualiza os dados existentes
   pgm.sql("UPDATE headsets SET categoria = 'operacao' WHERE categoria = 'estoque';");
   
@@ -19,7 +19,7 @@ exports.up = (pgm) => {
   `);
 };
 
-exports.down = (pgm) => {
+export const down = (pgm) => {
   pgm.sql("UPDATE headsets SET categoria = 'estoque' WHERE categoria = 'operacao';");
   pgm.alterColumn('headsets', 'categoria', {
     default: 'estoque'

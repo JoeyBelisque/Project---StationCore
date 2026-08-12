@@ -618,7 +618,8 @@ body {
   letter-spacing: 0.05em;
   display: inline-flex;
   align-items: center;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Badge States */
@@ -724,6 +725,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.modal-head > div:first-child {
+  min-width: 0;
+  flex: 1;
 }
 
 .modal-head h2 {
@@ -732,12 +740,32 @@ body {
   color: var(--text);
   margin: 0;
   letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
 }
 
 .modal-body {
   padding: 2rem;
   overflow-y: auto;
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.modal-body > * {
+  max-width: 100%;
+}
+
+.modal-body .badge,
+.modal-body .alert,
+.modal-body [class*="alert-"] {
+  max-width: 100%;
+  line-height: 1.45;
+}
+
+.modal-notice-text {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .modal-foot {
@@ -747,6 +775,12 @@ body {
   justify-content: flex-end;
   gap: 1rem;
   background: rgba(var(--bg-rgb), 0.2);
+  flex-wrap: wrap;
+}
+
+.modal-foot > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 @media (max-width: 640px) {

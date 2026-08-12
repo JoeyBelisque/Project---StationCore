@@ -9,6 +9,7 @@ import headsetRoutes from "./routes/headset.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import usuarioRoutes from "./routes/usuario.routes.js";
 import importacaoRoutes from "./routes/importacao.routes.js";
+import achadoPerdidoRoutes from "./routes/achado-perdido.routes.js";
 import { requireAuth } from "./middlewares/auth.middleware.js";
 
 const app = express();
@@ -24,6 +25,7 @@ app.use("/usuarios", usuarioRoutes);
 app.use("/computadores", requireAuth, computadorRoutes);
 app.use("/headsets", requireAuth, headsetRoutes);
 app.use("/importacao", requireAuth, importacaoRoutes);
+app.use("/achados-perdidos", requireAuth, achadoPerdidoRoutes);
 
 // Middleware de erros do Express: 4 argumentos (err, req, res, next).
 // Só corre se alguma rota/controller chamar next(erro) ou lançar erro não tratado.

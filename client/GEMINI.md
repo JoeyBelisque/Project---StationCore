@@ -30,4 +30,4 @@ Este documento serve como roteiro para as próximas etapas de desenvolvimento, f
 - [x] **Animações de Transição:** Adicionadas classes `page-fade-in` para suavizar a navegação.
 
 ---
-*Progresso atualizado em 24 de maio de 2026. Sistema operando em v1.2.5 Premium.*
+*Progresso atualizado em 11 de agosto de 2026. Sistema operando em v2.0 Premium.*

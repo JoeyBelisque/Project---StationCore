@@ -1,14 +1,15 @@
-import { useState, createContext, useContext } from 'react'
+import { useState, useRef } from 'react'
 import { CheckCircle, AlertCircle, XCircle, Info, X } from 'lucide-react'
-
-const ToastContext = createContext()
+import { ToastContext } from './ToastContext'
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
+  const nextToastId = useRef(0)
 
   const addToast = (message, type = 'success', options = {}) => {
     setToasts((prev) => {
-      const id = Date.now()
+      if (prev.some(toast => toast.message === message && toast.type === type)) return prev
+      const id = `${Date.now()}-${nextToastId.current++}`
       const duration = options.duration ?? (type === 'error' || type === 'warning' ? 8000 : 5000)
       const persistent = options.persistent ?? false
       
@@ -77,5 +78,3 @@ export function ToastProvider({ children }) {
     </ToastContext.Provider>
   )
 }
-
-export const useToast = () => useContext(ToastContext)

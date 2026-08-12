@@ -17,6 +17,17 @@ import { listarAtividades } from '../services/atividadesApi'
 import { Pagination } from '../components/Pagination'
 import { Modal } from '../components/Modal'
 
+function dateInputValue(date) {
+  return date.toISOString().slice(0, 10)
+}
+
+function periodFromDays(days) {
+  const end = new Date()
+  const start = new Date()
+  start.setDate(start.getDate() - days)
+  return { inicio: dateInputValue(start), fim: dateInputValue(end) }
+}
+
 function ActivityIcon({ acao }) {
   const iconSize = 18
   const acaoLower = acao?.toLowerCase() || ''
@@ -41,6 +52,13 @@ export function AuditoriaPage() {
   const [page, setPage] = useState(0)
   const [selectedRow, setSelectedRow] = useState(null)
   const pageSize = 20
+
+  const aplicarPeriodo = (days) => {
+    const periodo = periodFromDays(days)
+    setDataInicio(periodo.inicio)
+    setDataFim(periodo.fim)
+    setPage(0)
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -140,6 +158,9 @@ export function AuditoriaPage() {
                 value={dataFim} 
                 onChange={e => { setDataFim(e.target.value); setPage(0); }} 
               />
+              <button type="button" className="btn btn-secondary btn-small" onClick={() => aplicarPeriodo(0)}>Hoje</button>
+              <button type="button" className="btn btn-secondary btn-small" onClick={() => aplicarPeriodo(7)}>7 dias</button>
+              <button type="button" className="btn btn-secondary btn-small" onClick={() => { setDataInicio(''); setDataFim(''); setPage(0) }}>Limpar</button>
             </div>
 
             <div className="row gap">

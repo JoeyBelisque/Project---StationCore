@@ -16,6 +16,7 @@ import {
 import { listarHeadsets } from '../services/headsetsApi'
 import { listarComputadores } from '../services/computadoresApi'
 import { listarAtividades } from '../services/atividadesApi'
+import { listarAchadosPerdidos } from '../services/achadosPerdidosApi'
 import { ActivityLog } from '../components/ActivityLog'
 
 /**
@@ -122,7 +123,6 @@ export function Dashboard() {
   const [hsError, setHsError] = useState(null)
   const [pcError, setPcError] = useState(null)
   const [atividades, setAtividades] = useState([])
-  const [brandStats, setBrandStats] = useState([])
   const [hsStats, setHsStats] = useState({
     total: 0, emUso: 0, estoque: 0, emprestimo: 0, defeito: 0, manutencao: 0, perdas: 0
   })
@@ -209,15 +209,6 @@ export function Dashboard() {
           
           setAlerts(newAlerts) // RESET state instead of appending to fix duplication
 
-          // Cálculo de Desempenho por Marca
-          const brands = ['intelbras', 'plantronics']
-          const brandStats = brands.map(b => {
-            const total = rows.filter(r => r.marca?.toLowerCase() === b).length
-            const defeitos = rows.filter(r => r.marca?.toLowerCase() === b && (r.status === 'defeito' || r.status === 'manutencao')).length
-            const rate = total > 0 ? ((defeitos / total) * 100).toFixed(1) : 0
-            return { brand: b, total, defeitos, rate }
-          })
-          setBrandStats(brandStats)
         }
       })
       .catch(() => setHsError('Erro API'))
@@ -253,6 +244,23 @@ export function Dashboard() {
         setAtividades([])
       })
       .finally(() => setLoadingAtividades(false))
+
+    listarAchadosPerdidos('aguardando_devolucao')
+      .then((achados) => {
+        if (Array.isArray(achados) && achados.length > 0) {
+          setAlerts(current => [
+            ...current.filter(alert => alert.id !== 'found-items'),
+            {
+              id: 'found-items',
+              type: 'warning',
+              title: 'Achados aguardando devolução',
+              msg: `${achados.length} headset(s) encontrado(s) aguardando chamado ou entrega.`,
+              to: '/achados-perdidos'
+            }
+          ])
+        }
+      })
+      .catch(() => {})
   }, [])
 
   const hsVal = (val) => hsError ? '—' : (val ?? '0')
@@ -390,6 +398,7 @@ export function Dashboard() {
                 ))}
               </div>
             </div>
+
           </div>
         </section>
 
@@ -401,56 +410,7 @@ export function Dashboard() {
         </section>
       </div>
 
-      {/* Desempenho por Marca */}
-      <h3 className="section-title" style={{ marginTop: '3rem', marginBottom: '1.25rem' }}>Análise de Qualidade</h3>
-      <div className="brand-stats-grid">
-        {brandStats.map(s => (
-          <section key={s.brand} className="card brand-stat-card">
-            <div className="card-header">
-              <h4 className="card-title">{s.brand}</h4>
-              <span className={`badge ${parseFloat(s.rate) > 15 ? 'badge-danger' : 'badge-success'}`}>
-                {s.rate}% <span className="label-text">Defeito</span>
-              </span>
-            </div>
-            
-            <div className="card-body">
-              <div className="stat-item">
-                <span className="prop-label">Total</span>
-                <span className="prop-value">{s.total}</span>
-              </div>
-              <div className="stat-item">
-                <span className="prop-label">Manutenção</span>
-                <span className={`prop-value ${parseFloat(s.defeitos) > 0 ? 'text-warning' : ''}`}>
-                  {s.defeitos}
-                </span>
-              </div>
-            </div>
-
-            <div className="progress-bar-container">
-              <div
-                className="progress-bar-fill"
-                style={{
-                  width: `${100 - parseFloat(s.rate)}%`,
-                  background: parseFloat(s.rate) > 15 ? 'var(--danger)' : 'var(--success)'
-                }}
-              />
-            </div>
-          </section>
-        ))}
-      </div>
-
       <style>{`
-        .brand-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
-        .brand-stat-card { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; }
-        .card-title { margin: 0; text-transform: capitalize; font-size: 0.95rem; }
-        .badge .label-text { margin-left: 4px; font-weight: 400; opacity: 0.8; }
-        .card-body { display: flex; justify-content: space-between; align-items: center; background: var(--bg-secondary); padding: 0.75rem; border-radius: var(--radius-sm); }
-        .stat-item { display: flex; flex-direction: column; gap: 0.1rem; }
-        .prop-label { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
-        .prop-value { font-size: 1rem; font-weight: 700; }
-        .progress-bar-container { height: 4px; background: var(--bg-secondary); border-radius: 2px; overflow: hidden; }
-        .progress-bar-fill { height: 100%; transition: width 0.5s ease; border-radius: 2px; }
       `}</style>
 
       {/* Ações Rápidas e Dicas */}

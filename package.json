@@ -1,11 +1,11 @@
 {
   "name": "project---stationcore",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "",
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "nodemon src/app.js",
+    "dev": "nodemon --watch src --ignore client/dist src/app.js",
     "db:migrate": "node scripts/pg-migrate.mjs up",
     "db:migrate:down": "node scripts/pg-migrate.mjs down",
     "test": "echo \"Error: no test specified\" && exit 1"

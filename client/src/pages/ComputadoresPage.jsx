@@ -18,7 +18,7 @@ import {
 import { PC_STATUS, labelByValue } from '../constants/status'
 import { Modal } from '../components/Modal'
 import { Pagination } from '../components/Pagination'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/ToastContext'
 import {
   criarComputador,
   listarComputadores,

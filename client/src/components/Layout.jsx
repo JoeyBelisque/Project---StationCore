@@ -22,12 +22,13 @@ import {
   Package,
   Calendar,
   Layers,
-  Wrench
+  Wrench,
+  Archive
 } from 'lucide-react'
 import { clearUserSession, getStoredUser, isAdmin, saveUserSession } from '../lib/auth'
 import stationcoreLogo from '../assets/stationcore_icone.png'
 import { Modal } from './Modal'
-import { useToast } from './Toast'
+import { useToast } from './ToastContext'
 import { atualizarUsuario } from '../services/usuariosApi'
 
 /**
@@ -53,10 +54,12 @@ function Sidebar({ isOpen, toggleMobileMenu }) {
     },
     // ... outros itens
     { to: '/computadores', label: 'Computadores', icon: Monitor },
+    { to: '/achados-perdidos', label: 'Achados e Perdidos', icon: Archive },
     { to: '/usuarios', label: 'Usuários', icon: Users, adminOnly: true },
     { to: '/auditoria', label: 'Auditoria', icon: History },
     { to: '/importar', label: 'Importar', icon: ArrowDownToLine },
     { to: '/exportar', label: 'Exportar', icon: ArrowUpFromLine },
+    /*{ to: '/achados-perdidos', label: 'Achados e Perdidos', icon: Archive },*/
   ]
 
   const toggleDropdown = (id) => {
@@ -157,7 +160,7 @@ function Sidebar({ isOpen, toggleMobileMenu }) {
       </nav>
 
       <div className="sidebar-footer">
-        <p className="small muted">v1.2.5 Premium</p>
+        <p className="small muted">v3.0</p>
       </div>
 
       <style>{`

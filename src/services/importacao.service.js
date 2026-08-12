@@ -144,6 +144,7 @@ function collectHeadsets(rows) {
     const lacre = normalizeText(raw.lacre);
     const marca = normalizeText(raw.marca);
     const numero_serie = normalizeText(raw.numero_serie);
+    const statusInformado = Boolean(normalizeText(raw.status));
     const lifecycle = normalizeHeadsetLifecycle(raw.status, raw.observacoes, { matricula, nome_operador });
     const status = lifecycle.status;
     const categoria = lifecycle.categoria;
@@ -168,7 +169,7 @@ function collectHeadsets(rows) {
       if (seenNumeroSerie.has(k)) errors.push(rowError("headsets", line, `n serie duplicado: ${numero_serie}`));
       seenNumeroSerie.add(k);
     }
-    validRows.push({ matricula, nome_operador, nome, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, line });
+    validRows.push({ matricula, nome_operador, nome, lacre, marca, numero_serie, status, statusInformado, categoria, observacoes, data_devolucao, line });
   });
   return { validRows, errors };
 }
@@ -271,15 +272,32 @@ async function persistHeadsets(headsets) {
         const catFinal = deriveCategoria(row.status);
         const ins = await client.query(`INSERT INTO headsets (matricula, nome_operador, nome, lacre, marca, numero_serie, status, categoria, observacoes, data_devolucao, deleted_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL) RETURNING id`, [row.matricula, row.nome_operador, row.nome, row.lacre, row.marca, row.numero_serie || null, row.status, catFinal, row.observacoes, row.data_devolucao]);
         await client.query(`INSERT INTO headset_historico (headset_id, acao, campo, valor_novo, observacao) VALUES ($1, 'cadastro_importacao', 'headset', $2, $3)`, [ins.rows[0].id, row.lacre, row.observacoes]);
+        if (row.matricula || row.nome_operador) {
+          await client.query(`INSERT INTO headset_historico (headset_id, acao, campo, valor_novo, observacao) VALUES ($1, 'cadastro_importacao', 'usuario', $2, $3)`, [ins.rows[0].id, `${row.nome_operador || '—'} | Matrícula: ${row.matricula || '—'}`, 'Usuário inicial via importação']);
+        }
       } else {
         const atual = existing.rows[0];
-        const proxMat = row.matricula || normalizeText(atual.matricula);
-        const proxNomOp = row.nome_operador || normalizeText(atual.nome_operador);
+        const statusFinal = row.statusInformado
+          ? row.status
+          : (normalizeText(atual.matricula) || normalizeText(atual.nome_operador) ? atual.status : "estoque");
+        const statusSemOperador = ["estoque", "reserva", "perdido", "furtado"];
+        const deveDesvincular = row.statusInformado && statusSemOperador.includes(statusFinal);
+        const proxMat = deveDesvincular ? "" : (row.matricula || normalizeText(atual.matricula));
+        const proxNomOp = deveDesvincular ? "" : (row.nome_operador || normalizeText(atual.nome_operador));
         const proxNomHs = row.nome || normalizeText(atual.nome);
-        const proxStat = row.status || atual.status;
-        const proxCat = deriveCategoria(proxStat);
+        const proxStat = statusFinal;
+        const proxCat = row.statusInformado ? deriveCategoria(proxStat) : atual.categoria;
         const proxDev = row.data_devolucao || null;
         await client.query(`UPDATE headsets SET matricula = $2, nome_operador = $3, nome = $4, lacre = $5, marca = $6, numero_serie = $7, status = $8, categoria = $9, observacoes = $10, data_devolucao = $11, updated_at = NOW(), deleted_at = NULL WHERE id = $1`, [atual.id, proxMat, proxNomOp, proxNomHs, row.lacre, row.marca || atual.marca, row.numero_serie || atual.numero_serie, proxStat, proxCat, row.observacoes || atual.observacoes, proxDev]);
+
+        const historicoUsuario = `${proxNomOp || '—'} | Matrícula: ${proxMat || '—'}`;
+        const usuarioAnterior = `${normalizeText(atual.nome_operador) || '—'} | Matrícula: ${normalizeText(atual.matricula) || '—'}`;
+        if (historicoUsuario !== usuarioAnterior) {
+          await client.query(`INSERT INTO headset_historico (headset_id, acao, campo, valor_anterior, valor_novo, observacao) VALUES ($1, 'atualizacao_importacao', 'usuario', $2, $3, $4)`, [atual.id, usuarioAnterior, historicoUsuario, 'Usuário atualizado via importação']);
+        }
+        if (proxStat !== atual.status) {
+          await client.query(`INSERT INTO headset_historico (headset_id, acao, campo, valor_anterior, valor_novo, observacao) VALUES ($1, 'atualizacao_importacao', 'status', $2, $3, $4)`, [atual.id, atual.status, proxStat, 'Status atualizado via importação']);
+        }
         }
     }
     await client.query("COMMIT");

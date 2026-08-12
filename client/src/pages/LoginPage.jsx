@@ -107,7 +107,7 @@ export function LoginPage() {
         </form>
 
         <footer className="login-footer">
-          <p>© 2026 StationCore v1.2.0 • Premium Access</p>
+          <p>© 2026 StationCore v3.0 • Premium Access</p>
         </footer>
       </div>
 

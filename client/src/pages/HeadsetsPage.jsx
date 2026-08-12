@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { 
   Plus, 
   Search, 
@@ -12,7 +12,6 @@ import {
   RotateCcw,
   FileText,
   Trash2,
-  CheckCircle,
   XCircle,
   Calendar,
   CheckSquare,
@@ -32,7 +31,8 @@ import {
 import { HEADSET_STATUS, labelByValue } from '../constants/status'
 import { Modal } from '../components/Modal'
 import { Pagination } from '../components/Pagination'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/ToastContext'
+import { listarAchadosPorLacre } from '../services/achadosPerdidosApi'
 import {
   atualizarHeadset,
   atualizarHeadsetsEmLote,
@@ -42,7 +42,6 @@ import {
   removerHeadset,
   trocarLacreHeadset,
   trocarHeadset,
-  desligarOperador,
 } from '../services/headsetsApi'
 
 const PAGE_SIZE = 20
@@ -51,6 +50,22 @@ const CATEGORIA_LABELS = {
   operacao: 'Operação',
   emprestimo: 'Empréstimo',
 }
+
+function formatDateInput(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function addDaysToToday(days) {
+  const date = new Date()
+  date.setHours(0, 0, 0, 0)
+  date.setDate(date.getDate() + days)
+  return formatDateInput(date)
+}
+
+const todayInputDate = () => formatDateInput(new Date())
 
 function getBadgeClass(status) {
   const map = {
@@ -66,6 +81,18 @@ function getBadgeClass(status) {
     furtado: 'badge-danger',
   }
   return `badge ${map[status] || 'badge-info'}`
+}
+
+function historyFieldLabel(field) {
+  const labels = {
+    usuario: 'Usuário',
+    matricula: 'Matrícula',
+    nome_operador: 'Nome do operador',
+    status: 'Status',
+    data_devolucao: 'Data de devolução',
+    data_envio_manutencao: 'Envio para manutenção',
+  }
+  return labels[field] || field || 'Alteração'
 }
 
 function mapRow(r) {
@@ -107,7 +134,6 @@ export function HeadsetsPage() {
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [recentUpdates, setRecentUpdates] = useState(new Set())
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [q, setQ] = useState('')
   
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || '')
@@ -151,14 +177,12 @@ export function HeadsetsPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    setError(null)
     try {
       const data = await listarHeadsets()
       // Normaliza os dados vindos do banco para o padrão usado no componente (camelCase)
       setItems(Array.isArray(data) ? data.map(mapRow) : [])
       setSelectedIds(new Set())
-    } catch (e) {
-      setError(e.message || 'Falha ao carregar')
+    } catch {
       setItems([])
     } finally {
       setLoading(false)
@@ -225,21 +249,24 @@ export function HeadsetsPage() {
   // Handlers para Modais
   const openNew = () => setModal({ mode: 'edit', form: emptyForm() })
   const openEdit = (row) => setModal({ mode: 'edit', form: { ...emptyForm(), ...row } })
-  const openView = (row) => setModal({ mode: 'view', headset: row })
+  const openView = async (row) => {
+    setModal({ mode: 'view', headset: row, achados: [], loadingAchados: true })
+    try {
+      const achados = await listarAchadosPorLacre(row.lacre)
+      setModal(current => current?.mode === 'view' && current.headset.id === row.id
+        ? { ...current, achados, loadingAchados: false }
+        : current)
+    } catch {
+      setModal(current => current?.mode === 'view' && current.headset.id === row.id
+        ? { ...current, loadingAchados: false }
+        : current)
+    }
+  }
   const openVincular = (row) => setModal({ mode: 'vincular', form: { id: row.id, lacre: row.lacre, matricula: row.matricula ?? '', nomeOperador: row.nomeOperador ?? '', observacoes: row.observacoes ?? '', dataDevolucao: '', isEmprestimo: false } })
-  const openEmprestimo = (row) => setModal({ mode: 'vincular', form: { id: row.id, lacre: row.lacre, matricula: row.matricula ?? '', nomeOperador: row.nomeOperador ?? '', observacoes: row.observacoes ?? '', dataDevolucao: '', isEmprestimo: true } })
+  const openEmprestimo = (row) => setModal({ mode: 'vincular', form: { id: row.id, lacre: row.lacre, matricula: row.matricula ?? '', nomeOperador: row.nomeOperador ?? '', observacoes: row.observacoes ?? '', dataDevolucao: addDaysToToday(7), isEmprestimo: true } })
   const openTrocaLacre = (row) => setModal({ mode: 'trocaLacre', form: { id: row.id, lacreAtual: row.lacre, novoLacre: '', observacao: '' } })
-  const openTroca = (row) => setModal({ mode: 'troca', headset: row, form: { id_novo: '', status_novo_original: 'defeito', observacao: '' } })
-  const openRetornoManutencao = (row) => setModal({ mode: 'retornoManutencao', form: { id: row.id, lacre: row.lacre, custo: '', pecas: '', observacao: '' } })
+  const openTroca = (row) => setModal({ mode: 'troca', headset: row, form: { id_novo: '', status_novo_original: 'defeito', observacao: '', busca: '' } })
   const openAcoes = (row) => setModal({ mode: 'acoes', headset: row })
-  
-  const openDesligamento = () => setModal({ 
-    mode: 'desligamento', 
-    form: { 
-      matricula: '', 
-      observacao: '' 
-    } 
-  })
 
   const openBaixa = (row) => setModal({ 
     mode: 'baixa', 
@@ -320,6 +347,10 @@ export function HeadsetsPage() {
     const f = modal.form
     try {
       const row = items.find(h => h.id === f.id)
+      if (row.categoria === 'emprestimo' && !f.isEmprestimo) {
+        addToast('Este headset é destinado a empréstimos e não pode ser vinculado como uso comum.', 'warning')
+        return
+      }
       await atualizarHeadset(f.id, {
         nome: row.nome,
         matricula: f.matricula.trim(),
@@ -339,22 +370,23 @@ export function HeadsetsPage() {
     } catch (err) { addToast(err.message, 'error') }
   }
 
-  async function handleStatusRapido(row, status) {
+  async function handleEnviarManutencao(row) {
     try {
       await atualizarHeadset(row.id, {
         nome: row.nome,
-        nome_operador: (status === 'estoque' || status === 'defeito' || status === 'manutencao' || status === 'perdido' || status === 'furtado') ? '' : row.nomeOperador,
-        matricula: (status === 'estoque' || status === 'defeito' || status === 'manutencao' || status === 'perdido' || status === 'furtado') ? '' : row.matricula,
+        matricula: '',
+        nome_operador: '',
         lacre: row.lacre,
         marca: row.marca,
         numero_serie: row.numeroSerie,
-        status,
+        status: 'manutencao',
         categoria: row.categoria,
-        data_envio_manutencao: status === 'manutencao' ? new Date().toISOString() : (status === 'estoque' ? null : row.dataEnvioManutencao)
+        data_envio_manutencao: new Date().toISOString(),
+        observacoes: row.observacoes
       })
       setRecentUpdates(new Set([row.id]))
       setTimeout(() => setRecentUpdates(new Set()), 3000)
-      addToast(`Status atualizado para ${labelByValue(HEADSET_STATUS, status)}`)
+      addToast('Equipamento enviado para manutenção!')
       setModal(null)
       await load()
     } catch (err) { addToast(err.message, 'error') }
@@ -383,6 +415,7 @@ export function HeadsetsPage() {
         status: form.status,
         categoria: headset.categoria,
         data_devolucao: null,
+        desvincular_antes: true,
         observacoes: novaObs.slice(0, 1000) // Limite de segurança para o campo
       })
       setRecentUpdates(new Set([headset.id]))
@@ -449,24 +482,6 @@ export function HeadsetsPage() {
     } catch (err) { addToast(err.message, 'error') }
   }
 
-  async function handleDesligamento(e) {
-    e.preventDefault()
-    const { matricula, observacao } = modal.form
-    if (!matricula.trim()) return addToast('Informe a matrícula do operador.', 'warning')
-    
-    try {
-      setLoading(true)
-      const res = await desligarOperador(matricula.trim(), { observacao: observacao.trim() })
-      addToast(`Sucesso! ${res.count} equipamento(s) recolhidos para estoque.`, 'success')
-      setModal(null)
-      await load()
-    } catch (err) { 
-      addToast(err.message || 'Erro ao realizar desligamento', 'error') 
-    } finally {
-      setLoading(false)
-    }
-  }
-
   async function handleDelete(id) {
     if (!confirm('Deseja excluir permanentemente este registro?')) return
     try {
@@ -478,6 +493,8 @@ export function HeadsetsPage() {
   }
 
   const selectedCount = selectedIds.size
+  const selectedLinkedCount = items.filter(item => selectedIds.has(item.id) && (item.matricula || item.nomeOperador)).length
+  const selectedLoanCount = items.filter(item => selectedIds.has(item.id) && item.categoria === 'emprestimo').length
 
   return (
     <div className="page-fade-in">
@@ -489,7 +506,6 @@ export function HeadsetsPage() {
         <div className="row gap">
           <button className={`btn btn-secondary ${isCompact ? 'active' : ''}`} onClick={() => setIsCompact(!isCompact)} title="Alternar Visualização"><MoreHorizontal size={16} /></button>
           <button className="btn btn-secondary" onClick={load} disabled={loading}><RefreshCcw size={16} className={loading ? 'animate-spin' : ''} /></button>
-          <button className="btn btn-secondary text-danger" onClick={openDesligamento} title="Baixa por Desligamento"><UserMinus size={16} /><span className="hide-mobile">Desligamento</span></button>
           <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Novo Cadastro</button>
         </div>
       </header>
@@ -682,6 +698,13 @@ export function HeadsetsPage() {
                 </div>
               </div>
             </div>
+            {modal.loadingAchados === false && modal.achados?.some(item => item.status === 'aguardando_devolucao') && (
+              <div className="badge badge-warning modal-notice" style={{ padding: '1rem', display: 'flex', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <AlertTriangle size={16} />
+                <span className="modal-notice-text">Este headset possui uma ocorrência pendente em Achados e Perdidos. Consulte o módulo antes de fazer uma nova movimentação.</span>
+                <Link className="btn btn-small btn-secondary" to="/achados-perdidos">Abrir ocorrência</Link>
+              </div>
+            )}
           </div>
 
           <style>{`
@@ -783,8 +806,10 @@ export function HeadsetsPage() {
                 ) : (
                   (modal.headset.status === 'estoque' || modal.headset.status === 'reserva') && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      <button className="btn btn-primary w-full" onClick={() => openVincular(modal.headset)}><UserPlus size={16} /> Vincular Operador</button>
-                      <button className="btn btn-secondary w-full" style={{ border: '1px solid var(--accent)' }} onClick={() => openEmprestimo(modal.headset)}><Calendar size={16} /> Registrar Empréstimo</button>
+                      {modal.headset.categoria !== 'emprestimo' && (
+                        <button className="btn btn-primary w-full" onClick={() => openVincular(modal.headset)}><UserPlus size={16} /> Vincular Operador</button>
+                      )}
+                      <button className={`btn ${modal.headset.categoria === 'emprestimo' ? 'btn-primary' : 'btn-secondary'} w-full`} style={{ border: '1px solid var(--accent)' }} onClick={() => openEmprestimo(modal.headset)}><Calendar size={16} /> Registrar Empréstimo</button>
                     </div>
                   )
                 )}
@@ -798,25 +823,16 @@ export function HeadsetsPage() {
               </div>
             </div>
 
-            {/* Grupo: Estado e Manutenção */}
-            <div className="action-group">
-              <span className="action-group-label">Condição Técnica</span>
-              <div className="action-group-content">
-                {modal.headset.status === 'defeito' && <button className="btn btn-primary w-full" style={{ background: 'var(--accent)' }} onClick={() => handleStatusRapido(modal.headset, 'manutencao')}><Wrench size={16} /> Enviar p/ Manutenção</button>}
-                {modal.headset.status === 'manutencao' && <button className="btn btn-primary w-full" style={{ background: 'var(--success)' }} onClick={() => openRetornoManutencao(modal.headset)}><CheckCircle size={16} /> Registrar Retorno</button>}
-                
-                {!(modal.headset.status === 'manutencao') && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                    <button className="btn btn-secondary btn-small text-danger" onClick={() => handleStatusRapido(modal.headset, 'defeito')} title="Defeito">
-                      <AlertTriangle size={14} /> Defeito
-                    </button>
-                    <button className="btn btn-secondary btn-small text-danger" onClick={() => handleStatusRapido(modal.headset, 'perdido')} title="Extravio">
-                      <XCircle size={14} /> Extravio
-                    </button>
-                  </div>
-                )}
+            {modal.headset.status === 'defeito' && (
+              <div className="action-group">
+                <span className="action-group-label">Próximo passo</span>
+                <div className="action-group-content">
+                  <button className="btn btn-primary w-full" onClick={() => handleEnviarManutencao(modal.headset)}>
+                    <Wrench size={16} /> Enviar p/ Manutenção
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Grupo: Configurações */}
             <div className="action-group">
@@ -835,6 +851,15 @@ export function HeadsetsPage() {
             .action-group-label { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; padding-left: 2px; }
             .action-group-content { display: flex; flex-direction: column; gap: 0.5rem; }
             .action-btn-highlight { font-weight: 700; border: 1px solid var(--border); }
+            .date-field-group { display: flex; flex-direction: column; gap: 0.5rem; }
+            .date-field-group label { display: flex; flex-direction: column; gap: 0.5rem; }
+            .date-shortcuts { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+            .date-shortcuts .btn.active { border-color: var(--accent); color: var(--accent-light); background: var(--accent-glow); }
+            .swap-search-results { display: flex; flex-direction: column; gap: 0.25rem; max-height: 180px; overflow-y: auto; margin-top: 0.5rem; }
+            .swap-result { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; width: 100%; padding: 0.55rem 0.7rem; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); cursor: pointer; }
+            .swap-result:hover, .swap-result.selected { border-color: var(--accent); background: var(--accent-glow); }
+            .swap-result strong { font-size: 0.8rem; }
+            .swap-result span { color: var(--text-muted); font-size: 0.7rem; }
           `}</style>
         </Modal>
       )}
@@ -875,7 +900,33 @@ export function HeadsetsPage() {
           <form id="f-vinc" className="form-grid" onSubmit={handleVincular}>
             <label className="full">Nome Operador<input className="input" value={modal.form.nomeOperador} onChange={e => setModal(m => ({...m, form: {...m.form, nomeOperador: e.target.value}}))} autoFocus required /></label>
             <label className="full">Matrícula (Opcional)<input className="input" value={modal.form.matricula} onChange={e => setModal(m => ({...m, form: {...m.form, matricula: e.target.value}}))} /></label>
-            {modal.form.isEmprestimo && <label className="full">Data Devolução<input type="date" className="input" value={modal.form.dataDevolucao} onChange={e => setModal(m => ({...m, form: {...m.form, dataDevolucao: e.target.value}}))} required /></label>}
+            {modal.form.isEmprestimo && (
+              <div className="full date-field-group">
+                <label>Data de devolução
+                  <input
+                    type="date"
+                    className="input"
+                    min={todayInputDate()}
+                    value={modal.form.dataDevolucao}
+                    onChange={e => setModal(m => ({...m, form: {...m.form, dataDevolucao: e.target.value}}))}
+                    required
+                  />
+                </label>
+                <div className="date-shortcuts" aria-label="Prazos rápidos">
+                  <span className="small muted">Prazo rápido:</span>
+                  {[1, 7, 15, 30].map(days => (
+                    <button
+                      key={days}
+                      type="button"
+                      className={`btn btn-small btn-secondary ${modal.form.dataDevolucao === addDaysToToday(days) ? 'active' : ''}`}
+                      onClick={() => setModal(m => ({...m, form: {...m.form, dataDevolucao: addDaysToToday(days)}}))}
+                    >
+                      {days} dias
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <label className="full">Observações Técnicas<textarea className="input" rows={2} value={modal.form.observacoes} onChange={e => setModal(m => ({...m, form: {...m.form, observacoes: e.target.value}}))} /></label>
           </form>
         </Modal>
@@ -886,10 +937,60 @@ export function HeadsetsPage() {
         <Modal title={`Substituição: ${modal.headset.lacre}`} onClose={() => setModal(null)} footer={<><button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button><button type="submit" form="f-swap" className="btn btn-primary" style={{ background: 'var(--warning)' }}>Efetivar Troca</button></>}>
           <form id="f-swap" className="form-grid" onSubmit={handleTroca}>
             <div className="full badge badge-info" style={{ padding: '1rem', marginBottom: '0.5rem', borderRadius: '4px', display: 'block' }}>Operador: <strong>{modal.headset.nomeOperador || modal.headset.matricula}</strong><p className="small">O operador será transferido para o novo equipamento.</p></div>
-            <label className="full">Selecionar Novo Headset (Estoque)<select className="input" value={modal.form.id_novo} onChange={e => setModal(m => ({...m, form: {...m.form, id_novo: e.target.value}}))} required><option value="">Selecione...</option>{disponiveisParaTroca.map(h => (<option key={h.id} value={h.id}>{h.nome ? `${h.nome} (${h.lacre})` : `Lacre: ${h.lacre}`} | {h.marca} {h.numeroSerie ? `(SN: ${h.numeroSerie})` : ''}</option>))}</select></label>
+            <label className="full swap-search-field">
+              <span className="form-label">Pesquisar headset disponível</span>
+              <div className="input-with-icon">
+                <Search size={16} className="icon" />
+                <input
+                  className="input"
+                  placeholder="Buscar por lacre, nome, série ou marca..."
+                  value={modal.form.busca}
+                  onChange={e => setModal(m => ({...m, form: {...m.form, busca: e.target.value}}))}
+                />
+              </div>
+              {modal.form.busca.trim() && (
+                <div className="swap-search-results">
+                  {disponiveisParaTroca
+                    .filter(h => `${h.nome} ${h.lacre} ${h.marca} ${h.numeroSerie}`.toLowerCase().includes(modal.form.busca.trim().toLowerCase()))
+                    .slice(0, 8)
+                    .map(h => (
+                      <button
+                        type="button"
+                        key={h.id}
+                        className={`swap-result ${modal.form.id_novo === h.id ? 'selected' : ''}`}
+                        onClick={() => setModal(m => ({...m, form: {...m.form, id_novo: h.id, busca: h.lacre}}))}
+                      >
+                        <strong>{h.nome || `Lacre ${h.lacre}`}</strong>
+                        <span>{h.lacre} {h.marca ? `• ${h.marca}` : ''} {h.numeroSerie ? `• ${h.numeroSerie}` : ''}</span>
+                      </button>
+                    ))}
+                </div>
+              )}
+            </label>
+            <label className="full">Selecionar Novo Headset (Estoque)
+              <select className="input" value={modal.form.id_novo} onChange={e => setModal(m => ({...m, form: {...m.form, id_novo: e.target.value}}))} required>
+                <option value="">Selecione...</option>
+                {disponiveisParaTroca
+                  .filter(h => `${h.nome} ${h.lacre} ${h.marca} ${h.numeroSerie}`.toLowerCase().includes((modal.form.busca || '').trim().toLowerCase()))
+                  .map(h => (
+                    <option key={h.id} value={h.id}>{h.nome ? `${h.nome} (${h.lacre})` : `Lacre: ${h.lacre}`} | {h.marca} {h.numeroSerie ? `(SN: ${h.numeroSerie})` : ''}</option>
+                  ))}
+              </select>
+              {modal.form.busca && !disponiveisParaTroca.some(h => `${h.nome} ${h.lacre} ${h.marca} ${h.numeroSerie}`.toLowerCase().includes(modal.form.busca.trim().toLowerCase())) && (
+                <span className="small muted">Nenhum headset disponível encontrado.</span>
+              )}
+            </label>
             <label className="full">Motivo / Destino do Antigo<select className="input" value={modal.form.status_novo_original} onChange={e => setModal(m => ({...m, form: {...m.form, status_novo_original: e.target.value}}))} required><option value="defeito">Defeito Técnico</option><option value="perdido">Extravio / Perda</option><option value="furtado">Furto / Roubo</option></select></label>
             <label className="full">Obs Técnicas<textarea className="input" rows={2} value={modal.form.observacao} onChange={e => setModal(m => ({...m, form: {...m.form, observacao: e.target.value}}))} /></label>
           </form>
+          <style>{`
+            .swap-search-field { position: relative; }
+            .swap-search-results { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% - 0.25rem); display: flex; flex-direction: column; gap: 0.25rem; max-height: 180px; overflow-y: auto; padding: 0.35rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
+            .swap-result { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; width: 100%; padding: 0.55rem 0.7rem; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); cursor: pointer; }
+            .swap-result:hover, .swap-result.selected { border-color: var(--accent); background: var(--accent-glow); }
+            .swap-result strong { font-size: 0.8rem; }
+            .swap-result span { color: var(--text-muted); font-size: 0.7rem; }
+          `}</style>
         </Modal>
       )}
 
@@ -899,14 +1000,37 @@ export function HeadsetsPage() {
           <form id="f-batch" onSubmit={handleBatchStatus}>
             <div className="badge badge-info" style={{ padding: '1rem', marginBottom: '1rem', borderRadius: '4px', display: 'block' }}>
               Alterar status de <strong>{modal.count}</strong> equipamento(s) selecionado(s).
-              {modal.form.status !== 'em_uso' && modal.form.status !== 'emprestimo' && (
-                <span> Matrículas e nomes de operador serão removidos.</span>
+              {['estoque', 'reserva', 'perdido', 'furtado'].includes(modal.form.status) && (
+                <span> Este status exige recolhimento e remove o vínculo do operador.</span>
+              )}
+              {selectedLinkedCount > 0 && (
+                <span className="text-danger" style={{ display: 'block', marginTop: '0.5rem' }}>
+                  {selectedLinkedCount} selecionado(s) possui(em) vínculo ativo. Estoque, reserva, extravio e furto exigem recolhimento explícito.
+                </span>
+              )}
+              {selectedLoanCount > 0 && (
+                <span className="text-warning" style={{ display: 'block', marginTop: '0.5rem' }}>
+                  {selectedLoanCount} selecionado(s) pertence(m) à finalidade empréstimo. A finalidade não será convertida em operação em lote.
+                </span>
               )}
             </div>
             <label className="full">
               <span className="form-label">Novo Status</span>
               <select className="input" value={modal.form.status} onChange={e => setModal(m => ({...m, form: {...m.form, status: e.target.value}}))} required>
-                {HEADSET_STATUS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {HEADSET_STATUS.filter(o => o.value !== 'desligado').map(o => (
+                  <option
+                    key={o.value}
+                    value={o.value}
+                    disabled={
+                      o.value === 'desligado' ||
+                      (selectedLinkedCount > 0 && ['estoque', 'reserva', 'perdido', 'furtado'].includes(o.value)) ||
+                      (selectedLoanCount > 0 && o.value === 'em_uso') ||
+                      (selectedLoanCount < selectedCount && o.value === 'emprestimo')
+                    }
+                  >
+                    {o.label}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="full">Observação (Opcional)<textarea className="input" rows={3} value={modal.form.observacao} onChange={e => setModal(m => ({...m, form: {...m.form, observacao: e.target.value}}))} placeholder="Ex: Correção pós-importação de planilha" /></label>
@@ -953,8 +1077,8 @@ export function HeadsetsPage() {
           {modal.loading ? <p className="muted">Carregando...</p> : modal.rows.length === 0 ? <p className="muted">Nenhuma alteração registrada.</p> : (
             <div className="table-container" style={{ maxHeight: '400px', marginTop: 0 }}>
               <table>
-                <thead><tr><th>Data</th><th>Ação</th><th>Campo</th><th>De</th><th>Para</th></tr></thead>
-                <tbody>{modal.rows.map(r => (<tr key={r.id}><td className="small muted">{new Date(r.created_at).toLocaleString('pt-BR')}</td><td>{r.acao}</td><td>{r.campo || '—'}</td><td className="mono small">{r.valor_anterior || '—'}</td><td className="mono small">{r.valor_novo || '—'}</td></tr>))}</tbody>
+                <thead><tr><th>Data</th><th>Ação</th><th>O que mudou</th><th>Antes</th><th>Depois</th></tr></thead>
+                <tbody>{modal.rows.map(r => (<tr key={r.id}><td className="small muted">{new Date(r.created_at).toLocaleString('pt-BR')}</td><td>{r.acao?.replaceAll('_', ' ') || 'Alteração'}</td><td>{historyFieldLabel(r.campo)}</td><td className="mono small">{r.valor_anterior || '—'}</td><td className="mono small">{r.valor_novo || '—'}</td></tr>))}</tbody>
               </table>
             </div>
           )}

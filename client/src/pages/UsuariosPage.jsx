@@ -13,7 +13,7 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import { Modal } from '../components/Modal'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/ToastContext'
 import {
   listarUsuarios,
   criarUsuario,

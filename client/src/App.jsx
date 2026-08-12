@@ -8,6 +8,7 @@ import { ImportPage } from './pages/ImportPage'
 import { ExportarPage } from './pages/ExportarPage'
 import { AuditoriaPage } from './pages/AuditoriaPage'
 import { LoginPage } from './pages/LoginPage'
+import { AchadosPerdidosPage } from './pages/AchadosPerdidosPage'
 import { getStoredUser } from './lib/auth'
 import { ToastProvider } from './components/Toast'
 
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="auditoria" element={<AuditoriaPage />} />
             <Route path="importar" element={<ImportPage />} />
             <Route path="exportar" element={<ExportarPage />} />
+            <Route path="achados-perdidos" element={<AchadosPerdidosPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           
           </Route>

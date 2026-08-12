@@ -1,10 +1,8 @@
 
-exports.up = (pgm) => {
-  pgm.addColumn('computadores', {
-    deleted_at: { type: 'timestamptz', default: null }
-  });
+export const up = (pgm) => {
+  pgm.sql(`ALTER TABLE computadores ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL;`);
 };
 
-exports.down = (pgm) => {
-  pgm.dropColumn('computadores', 'deleted_at');
+export const down = (pgm) => {
+  pgm.sql(`ALTER TABLE computadores DROP COLUMN IF EXISTS deleted_at;`);
 };

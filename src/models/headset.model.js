@@ -69,6 +69,10 @@ function normalizePayload(data) {
 
   // REGRA DE OURO: Consistência de Dados
   // 1. Se informou matrícula ou nome de operador, o status NÃO PODE ser 'estoque' ou 'reserva'
+  if (categoria === "emprestimo" && status === "em_uso") {
+    throw failValidation("headset destinado a empréstimo só pode ser vinculado como empréstimo");
+  }
+
   if (matricula || nome_operador) {
     if (status === "estoque" || status === "reserva") {
       // Se for um headset de empréstimo, o status correto é 'emprestimo'
@@ -162,6 +166,17 @@ export async function createHeadset(data) {
     );
     const row = result.rows[0];
     await addHistoryEntry(client, row.id, "cadastro", "headset", null, row.lacre, payload.observacoes);
+    if (payload.matricula || payload.nome_operador) {
+      await addHistoryEntry(
+        client,
+        row.id,
+        "cadastro",
+        "usuario",
+        null,
+        `${payload.nome_operador || '—'} | Matrícula: ${payload.matricula || '—'}`,
+        "Usuário inicial"
+      );
+    }
     await client.query("COMMIT");
     return row;
   } catch (error) {
@@ -183,6 +198,13 @@ export async function updateHeadset(id, data) {
     if (!current) {
       await client.query("ROLLBACK");
       return null;
+    }
+
+    const hasActiveOperator = Boolean(current.matricula || current.nome_operador);
+    const isLossStatus = payload.status === "perdido" || payload.status === "furtado";
+    if (hasActiveOperator && isLossStatus && !data?.desvincular_antes) {
+      await client.query("ROLLBACK");
+      throw failValidation("desvincule o operador ou use a substituição antes de registrar extravio/furto");
     }
 
     const result = await client.query(
@@ -441,29 +463,60 @@ export async function updateBatch(ids, data) {
     let count = 0;
 
     const status = data.status ? String(data.status).trim() : null;
-    const statusSemOperador = ["estoque", "reserva", "defeito", "manutencao", "perdido", "furtado", "desligado"];
+    const statusSemOperador = ["estoque", "reserva", "perdido", "furtado"];
     const isClearingOperador = status && statusSemOperador.includes(status);
     const isSendingToMaint = status === "manutencao";
     const isReturningToStock = status === "estoque" || status === "reserva";
     const observacoesAdd = data.observacoes ? String(data.observacoes).trim() : "";
 
-    function deriveCategoriaFromStatus(s) {
-      if (s === "em_uso") return "operacao";
-      if (s === "emprestimo") return "emprestimo";
-      if (s === "entrega") return "entrega";
-      if (s === "defeito" || s === "manutencao") return "manutencao";
-      return "operacao";
+    const selectedRows = [];
+    for (const id of ids) {
+      const currentRes = await client.query(
+        `SELECT id, lacre, matricula, nome_operador, status FROM headsets WHERE id = $1`,
+        [id]
+      );
+      if (currentRes.rowCount > 0) selectedRows.push(currentRes.rows[0]);
     }
 
-    for (const id of ids) {
-      const currentRes = await client.query(`SELECT * FROM headsets WHERE id = $1`, [id]);
-      if (currentRes.rowCount === 0) continue;
+    const isLossStatus = status === "perdido" || status === "furtado";
+    if (status === "desligado") {
+      throw failValidation("desligamento deve ser feito pela ação de recolhimento para estoque");
+    }
+    const loanToOperation = status === "em_uso" && selectedRows.some(row => row.categoria === "emprestimo");
+    if (loanToOperation) {
+      throw failValidation("headset destinado a empréstimo não pode ser alterado para uso comum em lote");
+    }
+    const operationToLoan = status === "emprestimo" && selectedRows.some(row => row.categoria !== "emprestimo");
+    if (operationToLoan) {
+      throw failValidation("a finalidade de operação não pode ser convertida em empréstimo em lote");
+    }
+    if (isReturningToStock) {
+      const linkedRows = selectedRows.filter(row => row.matricula || row.nome_operador);
+      if (linkedRows.length > 0) {
+        const labels = linkedRows.map(row => row.lacre).filter(Boolean).join(', ');
+        throw failValidation(
+          `Não é possível enviar para ${status === "estoque" ? "estoque" : "reserva"} em lote: ${linkedRows.length} headset(s) possuem operador vinculado${labels ? ` (${labels})` : ''}. Use recolhimento ou desligamento.`
+        );
+      }
+    }
+    if (isLossStatus) {
+      const linkedRows = selectedRows.filter(row => row.matricula || row.nome_operador);
+      if (linkedRows.length > 0) {
+        const labels = linkedRows.map(row => row.lacre).filter(Boolean).join(', ');
+        throw failValidation(
+          `Não é possível registrar ${status === "perdido" ? "extravio" : "furto"} em lote: ${linkedRows.length} headset(s) possuem operador vinculado${labels ? ` (${labels})` : ''}. Use recolhimento ou substituição.`
+        );
+      }
+    }
+
+    for (const selectedRow of selectedRows) {
+      const currentRes = await client.query(`SELECT * FROM headsets WHERE id = $1`, [selectedRow.id]);
       const current = currentRes.rows[0];
 
       const nextStatus = status || current.status;
       const nextMatricula = isClearingOperador ? "" : current.matricula;
       const nextNomeOperador = isClearingOperador ? "" : current.nome_operador;
-      const nextCategoria = status ? deriveCategoriaFromStatus(nextStatus) : current.categoria;
+      const nextCategoria = current.categoria;
       const nextMaintDate = isSendingToMaint
         ? (current.data_envio_manutencao || new Date())
         : (isReturningToStock ? null : current.data_envio_manutencao);
@@ -475,17 +528,17 @@ export async function updateBatch(ids, data) {
 
       await client.query(
         `UPDATE headsets SET status = $1, categoria = $2, observacoes = $3, matricula = $4, nome_operador = $5, data_envio_manutencao = $6, data_devolucao = $7, updated_at = NOW() WHERE id = $8`,
-        [nextStatus, nextCategoria, nextObs, nextMatricula, nextNomeOperador, nextMaintDate, nextLoanDate, id]
+        [nextStatus, nextCategoria, nextObs, nextMatricula, nextNomeOperador, nextMaintDate, nextLoanDate, selectedRow.id]
       );
 
       if (status && status !== current.status) {
-        await addHistoryEntry(client, id, "atualizacao_lote", "status", current.status, status, "Atualização em lote");
+        await addHistoryEntry(client, selectedRow.id, "atualizacao_lote", "status", current.status, status, "Atualização em lote");
       }
       if (nextMatricula !== current.matricula) {
-        await addHistoryEntry(client, id, "atualizacao_lote", "matricula", current.matricula, nextMatricula, "Atualização em lote");
+        await addHistoryEntry(client, selectedRow.id, "atualizacao_lote", "matricula", current.matricula, nextMatricula, "Atualização em lote");
       }
       if (nextNomeOperador !== current.nome_operador) {
-        await addHistoryEntry(client, id, "atualizacao_lote", "nome_operador", current.nome_operador, nextNomeOperador, "Atualização em lote");
+        await addHistoryEntry(client, selectedRow.id, "atualizacao_lote", "nome_operador", current.nome_operador, nextNomeOperador, "Atualização em lote");
       }
 
       count++;

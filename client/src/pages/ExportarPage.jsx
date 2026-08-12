@@ -60,6 +60,17 @@ const COLUNAS_PC = [
   { id: 'updated_at', label: 'Última Atualização' },
 ]
 
+function dateInputValue(date) {
+  return date.toISOString().slice(0, 10)
+}
+
+function periodFromDays(days) {
+  const end = new Date()
+  const start = new Date()
+  start.setDate(start.getDate() - days)
+  return { inicio: dateInputValue(start), fim: dateInputValue(end) }
+}
+
 /**
  * Utilitário para gerar arquivo Excel (.xlsx)
  */
@@ -101,6 +112,12 @@ export function ExportarPage() {
   const [feedback, setFeedback] = useState(null)
 
   const hoje = () => new Date().toISOString().slice(0, 10)
+
+  const aplicarPeriodo = (days) => {
+    const periodo = periodFromDays(days)
+    setDataInicio(periodo.inicio)
+    setDataFim(periodo.fim)
+  }
 
   // Filtra dados por data
   const filtrarPorData = (rows) => {
@@ -296,7 +313,10 @@ export function ExportarPage() {
             <input type="date" className="input w-full" value={dataFim} onChange={e => setDataFim(e.target.value)} />
           </div>
           <div className="row gap" style={{ alignSelf: 'flex-end', paddingBottom: '2px' }}>
-            <button className="btn btn-secondary" onClick={() => { setDataInicio(''); setDataFim(''); }}>Limpar Datas</button>
+            <button className="btn btn-secondary btn-small" onClick={() => aplicarPeriodo(0)}>Hoje</button>
+            <button className="btn btn-secondary btn-small" onClick={() => aplicarPeriodo(7)}>7 dias</button>
+            <button className="btn btn-secondary btn-small" onClick={() => aplicarPeriodo(30)}>30 dias</button>
+            <button className="btn btn-secondary btn-small" onClick={() => { setDataInicio(''); setDataFim(''); }}>Limpar</button>
           </div>
         </div>
         <p className="small muted" style={{ marginTop: '1rem' }}>

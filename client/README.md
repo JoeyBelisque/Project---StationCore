@@ -1,6 +1,29 @@
-# React + Vite
+# StationCore Client
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Frontend React/Vite do StationCore. O cliente consome a API Express pela rota `/api` durante o desenvolvimento.
+
+## Comandos
+
+```bash
+npm install
+npm run dev
+```
+
+Para validar a compilação de produção:
+
+```bash
+npm run build
+```
+
+O backend deve estar rodando na porta `3000` para que o proxy do Vite resolva `/api/computadores`, `/api/headsets`, `/api/achados-perdidos` e as demais rotas.
+
+## Módulos principais
+
+- Inventário de headsets e computadores.
+- Empréstimos, substituições e histórico de uso.
+- Importação e exportação de planilhas.
+- Auditoria de alterações.
+- Achados e Perdidos, com pendências integradas ao Dashboard.
 
 Currently, two official plugins are available:
 
